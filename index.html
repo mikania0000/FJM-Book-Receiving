@@ -107,7 +107,8 @@
             </div>
 
             <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 text-sm text-yellow-700">
-                請依序拍攝 6 張相片 (點擊框框即可拍照)。
+                請依序拍攝 6 張相片 (點擊框框即可拍照)。<br>
+                <span class="text-xs text-yellow-600 mt-1 inline-block">系統已自動換算目前為：<span id="ui-academic-term" class="font-bold"></span></span>
             </div>
 
             <!-- 照片上傳區 -->
@@ -140,7 +141,7 @@
     <div id="pdf-page-1" class="a4-template">
         <div class="page-title">
             高雄市立鳳甲國民中學<br>
-            「114學年度下學期教科書驗收相片」
+            「<span id="pdf-academic-term"></span>教科書驗收相片」
         </div>
         <div class="grid-2x2">
             <div class="photo-box"><img id="tpl-img-0" src=""><div class="publisher-label tpl-pub-name"></div></div>
@@ -163,6 +164,36 @@
         const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxLaHMD45PfrLFBGAwTzElsmgiIarqJsOjbBeTItgDE0ZQydgjcPARUz6tlwFM4JJV8/exec';
 
         const imageState = [null, null, null, null, null, null]; // 儲存 6 張照片的 Base64
+        let currentAcademicYearStr = ""; // 儲存計算出的學年度 (例如: 114)
+        let currentSemesterShort = "";   // 儲存計算出的學期 (例如: 下)
+
+        // 計算並設定當前學年度與學期
+        function initAcademicTerm() {
+            const now = new Date();
+            const rocYear = now.getFullYear() - 1911; // 換算民國年
+            const month = now.getMonth() + 1; // 1 ~ 12 月
+
+            if (month >= 2 && month <= 7) {
+                // 2月~7月: 算前一年的下學期 (例：115/2 ~ 115/7 = 114下)
+                currentAcademicYearStr = (rocYear - 1).toString();
+                currentSemesterShort = "下";
+            } else if (month === 1) {
+                // 1月: 算前一年的上學期 (例：116/1 = 115上)
+                currentAcademicYearStr = (rocYear - 1).toString();
+                currentSemesterShort = "上";
+            } else {
+                // 8月~12月: 算當年的上學期 (例：115/8 ~ 115/12 = 115上)
+                currentAcademicYearStr = rocYear.toString();
+                currentSemesterShort = "上";
+            }
+
+            const termString = `${currentAcademicYearStr}學年度${currentSemesterShort}學期`;
+            
+            // 更新 UI 提示
+            document.getElementById('ui-academic-term').textContent = termString;
+            // 更新 PDF 標題樣板
+            document.getElementById('pdf-academic-term').textContent = termString;
+        }
 
         // 初始化上傳介面
         function initSlots() {
@@ -281,8 +312,8 @@
                 const canvas2 = await html2canvas(page2Obj, { scale: 2, useCORS: true });
                 pdf.addImage(canvas2.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, 210, 297);
 
-                // 5. 輸出 PDF 為 Blob 檔案
-                const fileName = `114下_教科書驗收_${publisher}.pdf`;
+                // 5. 輸出 PDF 為 Blob 檔案 (使用動態計算出的學年度與學期命名)
+                const fileName = `${currentAcademicYearStr}${currentSemesterShort}_教科書驗收_${publisher}.pdf`;
                 const pdfBlob = pdf.output('blob');
                 
                 // 6. 將 PDF 轉為 Base64 準備上傳
@@ -307,7 +338,7 @@
                 hideLoading();
 
                 if (result.status === 'success') {
-                    alert(`上傳成功！\n【${publisher}】的驗收檔案已儲存至 Google 雲端硬碟。`);
+                    alert(`上傳成功！\n【${publisher}】的驗收檔案已儲存至 Google 雲端硬碟。\n檔名為：${fileName}`);
                     // 上傳成功後自動清空畫面，準備拍下一家
                     for(let i=0; i<6; i++) {
                         imageState[i] = null;
@@ -337,7 +368,10 @@
         }
 
         // 啟動初始化
-        window.onload = initSlots;
+        window.onload = function() {
+            initAcademicTerm(); // 先計算學年度
+            initSlots();        // 再初始化上傳區塊
+        };
     </script>
 </body>
 </html>
