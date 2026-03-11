@@ -189,6 +189,21 @@
         </div>
     </div>
 
+    <!-- 通用自訂 Modal -->
+    <div id="custom-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-[100] p-4">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-2xl relative transform transition-all scale-100">
+            <h2 id="custom-modal-title" class="text-xl font-bold mb-4 text-gray-800 flex items-center">
+                提示
+            </h2>
+            <div id="custom-modal-message" class="text-gray-600 mb-4 whitespace-pre-line leading-relaxed"></div>
+            <input type="text" id="custom-modal-input" class="hidden w-full border border-gray-300 rounded p-3 mb-4 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="">
+            <div class="flex justify-end gap-3 mt-2">
+                <button id="custom-modal-cancel" class="hidden px-5 py-2.5 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition focus:outline-none">取消</button>
+                <button id="custom-modal-ok" class="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition focus:outline-none shadow-sm">確定</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 載入中遮罩 -->
     <div id="loading" class="flex">
         <div class="spinner mb-4"></div>
@@ -226,6 +241,68 @@
         let currentSemesterShort = "";   // 儲存計算出的學期 (例如: 下)
         let adminPwd = ""; // 暫存通過驗證的密碼，供刪除時使用
 
+        // ==========================================
+        // ★ 自訂 Modal 核心邏輯 (取代 alert/confirm/prompt)
+        // ==========================================
+        function showCustomModal({ title, message, type = 'alert' }) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('custom-modal');
+                const titleEl = document.getElementById('custom-modal-title');
+                const msgEl = document.getElementById('custom-modal-message');
+                const inputEl = document.getElementById('custom-modal-input');
+                const cancelBtn = document.getElementById('custom-modal-cancel');
+                const okBtn = document.getElementById('custom-modal-ok');
+
+                titleEl.textContent = title || '提示';
+                msgEl.textContent = message;
+
+                // Reset UI
+                inputEl.classList.add('hidden');
+                inputEl.value = '';
+                cancelBtn.classList.add('hidden');
+                
+                // Adjust colors based on title (Optional enhancement for warnings)
+                if (title && (title.includes('警告') || title.includes('錯誤'))) {
+                    okBtn.className = 'px-5 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition focus:outline-none shadow-sm';
+                    titleEl.className = 'text-xl font-bold mb-4 text-red-600 flex items-center';
+                } else {
+                    okBtn.className = 'px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition focus:outline-none shadow-sm';
+                    titleEl.className = 'text-xl font-bold mb-4 text-gray-800 flex items-center';
+                }
+                
+                if (type === 'prompt') {
+                    inputEl.classList.remove('hidden');
+                    cancelBtn.classList.remove('hidden');
+                    setTimeout(() => inputEl.focus(), 100);
+                } else if (type === 'confirm') {
+                    cancelBtn.classList.remove('hidden');
+                }
+
+                modal.classList.remove('hidden');
+
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    okBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                };
+
+                okBtn.onclick = () => {
+                    cleanup();
+                    resolve(type === 'prompt' ? inputEl.value : true);
+                };
+
+                cancelBtn.onclick = () => {
+                    cleanup();
+                    resolve(type === 'prompt' ? null : false);
+                };
+            });
+        }
+
+        const customAlert = (msg, title) => showCustomModal({ message: msg, title, type: 'alert' });
+        const customConfirm = (msg, title) => showCustomModal({ message: msg, title: title || '確認', type: 'confirm' });
+        const customPrompt = (msg, title) => showCustomModal({ message: msg, title: title || '輸入', type: 'prompt' });
+
+
         // 計算並設定當前學年度與學期
         function initAcademicTerm() {
             const now = new Date();
@@ -252,8 +329,8 @@
         }
 
         // 新增自訂書商功能
-        function addNewPublisher() {
-            const newPubName = prompt('請輸入新增的書商名稱：');
+        async function addNewPublisher() {
+            const newPubName = await customPrompt('請輸入新增的書商名稱：', '新增書商');
             if (newPubName && newPubName.trim() !== '') {
                 const select = document.getElementById('publisher-select');
                 const cleanName = newPubName.trim();
@@ -352,8 +429,8 @@
             reader.readAsDataURL(file);
         }
 
-        function clearImages() {
-            if(!confirm('確定要清除所有照片重新拍攝嗎？')) return;
+        async function clearImages() {
+            if(!(await customConfirm('確定要清除所有照片重新拍攝嗎？', '重新拍攝'))) return;
             for(let i=0; i<6; i++) {
                 imageState[i] = null;
                 document.getElementById(`preview-${i}`).src = '';
@@ -411,7 +488,7 @@
         // ==========================================
         async function generateAndUploadPDF() {
             if (imageState.includes(null)) {
-                alert('請先拍完 6 張相片再產生 PDF！');
+                await customAlert('請先拍完 6 張相片再產生 PDF！', '資料未完整');
                 return;
             }
             showLoading('正在產生 PDF 排版...', '請稍候');
@@ -438,7 +515,7 @@
                 hideLoading();
 
                 if (result.status === 'success') {
-                    alert(`上傳成功！\n【${publisher}】的驗收檔案已儲存至 Google 雲端硬碟。`);
+                    await customAlert(`上傳成功！\n【${publisher}】的驗收檔案已儲存至 Google 雲端硬碟。`, '上傳完成');
                     for(let i=0; i<6; i++) {
                         imageState[i] = null;
                         document.getElementById(`preview-${i}`).src = '';
@@ -452,7 +529,7 @@
             } catch (error) {
                 console.error(error);
                 hideLoading();
-                alert('發生錯誤：' + error.message);
+                await customAlert('發生錯誤：' + error.message, '上傳失敗');
             }
         }
 
@@ -473,12 +550,12 @@
                 if (dataList.status !== 'success') throw new Error(dataList.message);
                 if (dataList.files.length === 0) {
                     hideLoading();
-                    alert('雲端資料夾內目前沒有任何 PDF 檔案！');
+                    await customAlert('雲端資料夾內目前沒有任何 PDF 檔案！', '無檔案');
                     return;
                 }
 
                 hideLoading();
-                if (!confirm(`在雲端發現 ${dataList.files.length} 個 PDF 檔案，是否要下載？\n(若瀏覽器詢問是否允許多重下載，請點擊允許)`)) return;
+                if (!(await customConfirm(`在雲端發現 ${dataList.files.length} 個 PDF 檔案，是否要下載？\n(若瀏覽器詢問是否允許多重下載，請點擊允許)`, '下載確認'))) return;
 
                 // 2. 嘗試使用 File System Access API (支援讓使用者先選定一個資料夾，然後全部存入)
                 if (window.showDirectoryPicker) {
@@ -502,7 +579,7 @@
                             await writable.close();
                         }
                         hideLoading();
-                        alert("全部下載完成！");
+                        await customAlert("全部下載完成！", '下載成功');
                         return; // 成功儲存則結束
                     } catch (err) {
                         // 若取消選擇目錄或瀏覽器不支援此寫入模式，則退回下方的傳統個別下載模式
@@ -537,12 +614,12 @@
                 }
                 
                 hideLoading();
-                alert("已觸發所有檔案下載！");
+                await customAlert("已觸發所有檔案下載！", '下載成功');
 
             } catch (error) {
                 console.error(error);
                 hideLoading();
-                alert('下載時發生錯誤：' + error.message);
+                await customAlert('下載時發生錯誤：' + error.message, '錯誤');
             }
         }
 
@@ -564,7 +641,7 @@
         async function verifyDeletePassword() {
             const pwd = document.getElementById('delete-password').value;
             if (!pwd) {
-                alert('請輸入密碼！');
+                await customAlert('請輸入密碼！', '提示');
                 return;
             }
 
@@ -589,10 +666,10 @@
                     document.getElementById('delete-list-step').classList.remove('hidden');
                     renderCloudFilesForDelete(data.files);
                 } else {
-                    alert(data.message || '密碼錯誤！');
+                    await customAlert(data.message || '密碼錯誤！', '錯誤');
                 }
             } catch(e) {
-                alert('連線錯誤或後端尚未更新: ' + e.message);
+                await customAlert('連線錯誤或後端尚未更新: ' + e.message, '連線失敗');
             } finally {
                 btn.textContent = originalText;
                 btn.disabled = false;
@@ -642,7 +719,7 @@
         }
 
         async function deleteCloudFile(id, name) {
-            if (!confirm(`警告！\n\n確定要永久刪除「${name}」嗎？\n此動作將移至垃圾桶且無法復原！`)) return;
+            if (!(await customConfirm(`警告！\n\n確定要永久刪除「${name}」嗎？\n此動作將移至垃圾桶且無法復原！`, '刪除確認'))) return;
             
             showLoading('正在刪除...', name);
             try {
@@ -659,11 +736,11 @@
                     // 重新載入列表
                     await refreshCloudFilesForDelete(); 
                 } else {
-                    alert('刪除失敗: ' + (data.message || '請確認密碼是否正確'));
+                    await customAlert('刪除失敗: ' + (data.message || '請確認密碼是否正確'), '錯誤');
                 }
             } catch(e) {
                 hideLoading();
-                alert('發生錯誤: ' + e.message);
+                await customAlert('發生錯誤: ' + e.message, '錯誤');
             }
         }
 
