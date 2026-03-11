@@ -169,7 +169,7 @@
             <!-- 密碼輸入區塊 -->
             <div id="delete-auth-step">
                 <p class="text-sm text-gray-600 mb-2">此功能將永久刪除雲端檔案，請輸入管理員密碼：</p>
-                <input type="password" id="delete-password" class="w-full border border-gray-300 rounded p-3 mb-4 focus:ring-red-500 focus:border-red-500 outline-none" placeholder="輸入密碼 (預設: 000000)">
+                <input type="password" id="delete-password" class="w-full border border-gray-300 rounded p-3 mb-4 focus:ring-red-500 focus:border-red-500 outline-none" placeholder="輸入密碼">
                 <div class="flex justify-end gap-2">
                     <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
                     <button onclick="verifyDeletePassword()" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">驗證</button>
@@ -182,8 +182,9 @@
                 <div id="cloud-file-list" class="max-h-60 overflow-y-auto border rounded p-2 mb-4 space-y-2 bg-gray-50">
                     <!-- 檔案列表將在此動態生成 -->
                 </div>
-                <div class="flex justify-end">
-                    <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 w-full">關閉</button>
+                <div class="flex gap-2">
+                    <button onclick="deleteAllCloudFiles()" id="delete-all-btn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 w-full font-bold hidden">全部刪除</button>
+                    <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 w-full font-bold">關閉</button>
                 </div>
             </div>
         </div>
@@ -240,6 +241,7 @@
         let currentAcademicYearStr = ""; // 儲存計算出的學年度 (例如: 114)
         let currentSemesterShort = "";   // 儲存計算出的學期 (例如: 下)
         let adminPwd = ""; // 暫存通過驗證的密碼，供刪除時使用
+        let currentCloudFiles = []; // 暫存目前的檔案清單，供全部刪除使用
 
         // ==========================================
         // ★ 自訂 Modal 核心邏輯 (取代 alert/confirm/prompt)
@@ -678,11 +680,17 @@
 
         // 獨立出渲染列表的功能
         function renderCloudFilesForDelete(files) {
+            currentCloudFiles = files; // 存入全域變數
             const listContainer = document.getElementById('cloud-file-list');
+            const deleteAllBtn = document.getElementById('delete-all-btn');
+
             if (files.length === 0) {
                 listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">目前沒有任何檔案</p>';
+                deleteAllBtn.classList.add('hidden'); // 隱藏全部刪除按鈕
                 return;
             }
+            
+            deleteAllBtn.classList.remove('hidden'); // 顯示全部刪除按鈕
             listContainer.innerHTML = '';
             files.forEach(f => {
                 const div = document.createElement('div');
@@ -738,6 +746,50 @@
                 } else {
                     await customAlert('刪除失敗: ' + (data.message || '請確認密碼是否正確'), '錯誤');
                 }
+            } catch(e) {
+                hideLoading();
+                await customAlert('發生錯誤: ' + e.message, '錯誤');
+            }
+        }
+
+        async function deleteAllCloudFiles() {
+            if (!currentCloudFiles || currentCloudFiles.length === 0) return;
+
+            if (!(await customConfirm(`警告！\n\n確定要永久刪除雲端上的這 ${currentCloudFiles.length} 個檔案嗎？\n此動作將移至垃圾桶且無法復原！`, '全部刪除確認'))) return;
+
+            showLoading('正在全部刪除...', '請稍候，勿關閉視窗');
+            try {
+                let successCount = 0;
+                let failCount = 0;
+
+                // 依序刪除所有檔案
+                for (let i = 0; i < currentCloudFiles.length; i++) {
+                    const f = currentCloudFiles[i];
+                    showLoading(`正在刪除 (${i+1}/${currentCloudFiles.length})...`, f.name);
+                    
+                    const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'delete', fileId: f.id, password: adminPwd })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.status === 'success') {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                }
+
+                hideLoading();
+                if (failCount === 0) {
+                    await customAlert(`成功刪除全部 ${successCount} 個檔案！`, '刪除完成');
+                } else {
+                    await customAlert(`刪除作業結束。\n成功: ${successCount} 個\n失敗: ${failCount} 個`, '刪除完成 (含失敗)');
+                }
+
+                // 重新載入列表
+                await refreshCloudFilesForDelete(); 
             } catch(e) {
                 hideLoading();
                 await customAlert('發生錯誤: ' + e.message, '錯誤');
