@@ -10,8 +10,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <!-- 引入 jsPDF 負責產出 PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- 引入 JSZip 用於多檔案打包下載 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         /* 隱藏的 A4 樣板，用於產生 PDF (A4 比例，96 DPI 下約 794x1123) */
         .a4-template {
@@ -419,7 +417,8 @@
             showLoading('正在產生 PDF 排版...', '請稍候');
             try {
                 const { pdf, publisher } = await buildPDFDocument();
-                const fileName = `${currentAcademicYearStr}${currentSemesterShort}_教科書驗收_${publisher}.pdf`;
+                // ★ 這裡確保檔名包含「教科書驗收相片」
+                const fileName = `${currentAcademicYearStr}${currentSemesterShort}_教科書驗收相片_${publisher}.pdf`;
                 const pdfBlob = pdf.output('blob');
                 
                 showLoading('上傳至雲端資料夾...', '大約需要 10~20 秒');
@@ -458,7 +457,7 @@
         }
 
         // ==========================================
-        // ★ 核心功能 2：檢查並下載雲端 PDF
+        // ★ 核心功能 2：檢查並下載雲端 PDF (依序個別下載)
         // ==========================================
         async function downloadCloudPDFs() {
             showLoading('正在檢查雲端檔案...', '');
@@ -479,9 +478,9 @@
                 }
 
                 hideLoading();
-                if (!confirm(`在雲端發現 ${dataList.files.length} 個 PDF 檔案，是否要下載？`)) return;
+                if (!confirm(`在雲端發現 ${dataList.files.length} 個 PDF 檔案，是否要下載？\n(若瀏覽器詢問是否允許多重下載，請點擊允許)`)) return;
 
-                // 2. 嘗試使用 File System Access API (支援讓使用者選資料夾)
+                // 2. 嘗試使用 File System Access API (支援讓使用者先選定一個資料夾，然後全部存入)
                 if (window.showDirectoryPicker) {
                     try {
                         const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -506,15 +505,12 @@
                         alert("全部下載完成！");
                         return; // 成功儲存則結束
                     } catch (err) {
-                        // 若使用者取消選擇目錄或瀏覽器不允許，則退回 ZIP 模式
+                        // 若取消選擇目錄或瀏覽器不支援此寫入模式，則退回下方的傳統個別下載模式
                         if (err.name !== 'AbortError') console.error('Directory Picker Error:', err);
                     }
                 }
 
-                // 3. Fallback: 將所有檔案打包成 ZIP 下載 (最相容手機和各種瀏覽器)
-                showLoading('準備壓縮檔中...', '這需要一點時間，請勿關閉視窗');
-                const zip = new JSZip();
-                
+                // 3. 傳統個別下載模式 (依序呼叫瀏覽器下載功能，不再打包 ZIP)
                 for (let i = 0; i < dataList.files.length; i++) {
                     const f = dataList.files[i];
                     showLoading(`抓取檔案中 (${i+1}/${dataList.files.length})...`, f.name);
@@ -525,22 +521,23 @@
                         body: JSON.stringify({ action: 'download', fileId: f.id })
                     });
                     const dlData = await resDl.json();
-                    zip.file(f.name, dlData.fileData, {base64: true});
+                    const blob = base64ToBlob(dlData.fileData, 'application/pdf');
+
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = f.name; // 使用雲端上原本的檔名
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    // 稍微延遲避免被瀏覽器當作廣告阻擋多次連續下載
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
                 
-                showLoading('正在產生 ZIP 壓縮檔...', '');
-                const zipContent = await zip.generateAsync({type:"blob"});
-                const url = URL.createObjectURL(zipContent);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `教科書驗收_雲端備份_${new Date().getTime()}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
                 hideLoading();
-                alert("已觸發下載！多個檔案已打包為 ZIP 格式。");
+                alert("已觸發所有檔案下載！");
 
             } catch (error) {
                 console.error(error);
