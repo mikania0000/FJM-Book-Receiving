@@ -226,6 +226,7 @@
         const imageState = [null, null, null, null, null, null]; // 儲存 6 張照片的 Base64
         let currentAcademicYearStr = ""; // 儲存計算出的學年度 (例如: 114)
         let currentSemesterShort = "";   // 儲存計算出的學期 (例如: 下)
+        let adminPwd = ""; // 暫存通過驗證的密碼，供刪除時使用
 
         // 計算並設定當前學年度與學期
         function initAcademicTerm() {
@@ -556,6 +557,7 @@
             document.getElementById('delete-auth-step').classList.remove('hidden');
             document.getElementById('delete-list-step').classList.add('hidden');
             document.getElementById('delete-password').value = '';
+            adminPwd = ""; // 開啟時清空暫存密碼
         }
 
         function closeDeleteModal() {
@@ -564,43 +566,76 @@
 
         async function verifyDeletePassword() {
             const pwd = document.getElementById('delete-password').value;
-            if (pwd === '000000') {
-                document.getElementById('delete-auth-step').classList.add('hidden');
-                document.getElementById('delete-list-step').classList.remove('hidden');
-                await loadCloudFilesForDelete();
-            } else {
-                alert('密碼錯誤！請重新輸入。');
+            if (!pwd) {
+                alert('請輸入密碼！');
+                return;
             }
-        }
 
-        async function loadCloudFilesForDelete() {
-            const listContainer = document.getElementById('cloud-file-list');
-            listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">正在載入雲端檔案列表...</p>';
+            const btn = document.querySelector('#delete-auth-step button:last-child');
+            const originalText = btn.textContent;
+            btn.textContent = '驗證中...';
+            btn.disabled = true;
+
             try {
+                // 將密碼傳到 GS 後端進行驗證，並順便取得檔案列表
                 const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'list' })
+                    body: JSON.stringify({ action: 'verify_and_list', password: pwd })
                 });
                 const data = await res.json();
                 
                 if (data.status === 'success') {
-                    if (data.files.length === 0) {
-                        listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">目前沒有任何檔案</p>';
-                        return;
-                    }
-                    listContainer.innerHTML = '';
-                    data.files.forEach(f => {
-                        const div = document.createElement('div');
-                        div.className = 'flex justify-between items-center bg-white p-2 rounded border border-gray-200 shadow-sm';
-                        div.innerHTML = `
-                            <span class="text-sm truncate mr-2 flex-1 text-gray-700" title="${f.name}">${f.name}</span>
-                            <button onclick="deleteCloudFile('${f.id}', '${f.name}')" class="text-red-500 hover:bg-red-100 p-2 rounded-full shrink-0 transition" title="刪除">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                            </button>
-                        `;
-                        listContainer.appendChild(div);
-                    });
+                    // 驗證成功，將密碼暫存於記憶體供稍後刪除使用
+                    adminPwd = pwd; 
+                    document.getElementById('delete-auth-step').classList.add('hidden');
+                    document.getElementById('delete-list-step').classList.remove('hidden');
+                    renderCloudFilesForDelete(data.files);
+                } else {
+                    alert(data.message || '密碼錯誤！');
+                }
+            } catch(e) {
+                alert('連線錯誤或後端尚未更新: ' + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // 獨立出渲染列表的功能
+        function renderCloudFilesForDelete(files) {
+            const listContainer = document.getElementById('cloud-file-list');
+            if (files.length === 0) {
+                listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">目前沒有任何檔案</p>';
+                return;
+            }
+            listContainer.innerHTML = '';
+            files.forEach(f => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-white p-2 rounded border border-gray-200 shadow-sm';
+                div.innerHTML = `
+                    <span class="text-sm truncate mr-2 flex-1 text-gray-700" title="${f.name}">${f.name}</span>
+                    <button onclick="deleteCloudFile('${f.id}', '${f.name}')" class="text-red-500 hover:bg-red-100 p-2 rounded-full shrink-0 transition" title="刪除">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                `;
+                listContainer.appendChild(div);
+            });
+        }
+
+        // 刪除完成後，重新向後端要一次檔案列表 (帶上剛剛驗證過的密碼)
+        async function refreshCloudFilesForDelete() {
+            const listContainer = document.getElementById('cloud-file-list');
+            listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">正在重新載入雲端檔案列表...</p>';
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'verify_and_list', password: adminPwd })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    renderCloudFilesForDelete(data.files);
                 } else {
                     listContainer.innerHTML = `<p class="text-red-500 text-sm">載入失敗: ${data.message}</p>`;
                 }
@@ -614,19 +649,20 @@
             
             showLoading('正在刪除...', name);
             try {
+                // 將暫存的 adminPwd 一併傳送到後端進行雙重防護
                 const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'delete', fileId: id })
+                    body: JSON.stringify({ action: 'delete', fileId: id, password: adminPwd })
                 });
                 const data = await res.json();
                 hideLoading();
                 
                 if (data.status === 'success') {
                     // 重新載入列表
-                    await loadCloudFilesForDelete(); 
+                    await refreshCloudFilesForDelete(); 
                 } else {
-                    alert('刪除失敗: ' + data.message);
+                    alert('刪除失敗: ' + (data.message || '請確認密碼是否正確'));
                 }
             } catch(e) {
                 hideLoading();
