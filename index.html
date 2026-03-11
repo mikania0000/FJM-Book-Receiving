@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鳳甲國中教科書驗收</title>
+    <!-- 引入 Tailwind CSS 進行快速排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 html2canvas 負責將排版轉為圖片 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- 引入 jsPDF 負責產出 PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* 隱藏的 A4 樣板，用於產生 PDF (A4 比例，96 DPI 下約 794x1123) */
+        .a4-template {
+            width: 794px;
+            height: 1123px;
+            background-color: white;
+            padding: 40px;
+            box-sizing: border-box;
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            font-family: "標楷體", "DFKai-sb", serif;
+            color: black;
+        }
+        .page-title {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        .grid-2x2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            height: 900px;
+        }
+        .grid-2x1 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 440px;
+        }
+        .photo-box {
+            border: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+        }
+        .photo-box img {
+            max-width: 100%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+        .publisher-label {
+            font-size: 16px;
+            margin-top: 5px;
+            text-align: center;
+        }
+        /* Loading 遮罩 */
+        #loading {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 50;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-20">
+
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-md">
+        <!-- 頂部導覽列 -->
+        <div class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md">
+            <h1 class="text-xl font-bold text-center">鳳甲國中 教科書驗收</h1>
+        </div>
+
+        <div class="p-4 space-y-6">
+            <!-- 書商選擇 -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">選擇書商：</label>
+                <select id="publisher-select" class="w-full border-gray-300 rounded-md shadow-sm p-3 border focus:ring-blue-500 focus:border-blue-500 bg-white">
+                    <option value="康軒">康軒</option>
+                    <option value="翰林">翰林</option>
+                    <option value="南一">南一</option>
+                    <option value="長鴻">長鴻</option>
+                    <option value="真平">真平</option>
+                </select>
+            </div>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 text-sm text-yellow-700">
+                請依序拍攝6張相片 (點擊框框即可拍照)。
+            </div>
+
+            <!-- 照片上傳區 -->
+            <div class="grid grid-cols-2 gap-3" id="upload-slots">
+                <!-- 由 JS 動態生成 6 個槽位 -->
+            </div>
+
+            <!-- 操作按鈕 -->
+            <div class="mt-8 space-y-3">
+                <button onclick="generateAndUploadPDF()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg flex justify-center items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    產生 PDF 並上傳至雲端資料夾
+                </button>
+                <button onclick="clearImages()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg">
+                    清除重拍
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 載入中遮罩 -->
+    <div id="loading" class="flex">
+        <div class="spinner mb-3"></div>
+        <div id="loading-text" class="text-lg font-bold">處理中，請稍候...</div>
+    </div>
+
+    <!-- 隱藏的 A4 樣板 - 第一頁 -->
+    <div id="pdf-page-1" class="a4-template">
+        <div class="page-title">
+            高雄市立鳳甲國民中學<br>
+            「114學年度下學期教科書驗收相片」
+        </div>
+        <div class="grid-2x2">
+            <div class="photo-box"><img id="tpl-img-0" src=""><div class="publisher-label tpl-pub-name"></div></div>
+            <div class="photo-box"><img id="tpl-img-1" src=""><div class="publisher-label tpl-pub-name"></div></div>
+            <div class="photo-box"><img id="tpl-img-2" src=""><div class="publisher-label tpl-pub-name"></div></div>
+            <div class="photo-box"><img id="tpl-img-3" src=""><div class="publisher-label tpl-pub-name"></div></div>
+        </div>
+    </div>
+
+    <!-- 隱藏的 A4 樣板 - 第二頁 -->
+    <div id="pdf-page-2" class="a4-template">
+        <div class="grid-2x1">
+            <div class="photo-box"><img id="tpl-img-4" src=""><div class="publisher-label tpl-pub-name"></div></div>
+            <div class="photo-box"><img id="tpl-img-5" src=""><div class="publisher-label tpl-pub-name"></div></div>
+        </div>
+    </div>
+
+    <script>
+        // ★★★ 請將這裡換成您等一下部署 Google Apps Script 產生的網址 ★★★
+        const GOOGLE_APPS_SCRIPT_URL = '請替換成您的_Web_App_URL';
+
+        const imageState = [null, null, null, null, null, null]; // 儲存 6 張照片的 Base64
+
+        // 初始化上傳介面
+        function initSlots() {
+            const container = document.getElementById('upload-slots');
+            container.innerHTML = '';
+            for (let i = 0; i < 6; i++) {
+                container.innerHTML += `
+                    <div class="relative bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg h-40 flex justify-center items-center overflow-hidden cursor-pointer hover:bg-gray-100" onclick="document.getElementById('file-input-${i}').click()">
+                        <div class="text-gray-400 text-center z-0" id="placeholder-${i}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span>相片 ${i + 1}</span>
+                        </div>
+                        <img id="preview-${i}" class="absolute inset-0 w-full h-full object-cover hidden z-10">
+                        <input type="file" id="file-input-${i}" class="hidden" accept="image/*" capture="environment" onchange="handleImageSelect(event, ${i})">
+                    </div>
+                `;
+            }
+        }
+
+        // 處理圖片選擇與壓縮
+        function handleImageSelect(event, index) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // 使用 Canvas 進行圖片壓縮，避免產出的 PDF 過大當機
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1200; // 壓縮最大寬度
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7); // 70% 品質 JPEG
+                    
+                    // 顯示預覽
+                    document.getElementById(`preview-${index}`).src = dataUrl;
+                    document.getElementById(`preview-${index}`).classList.remove('hidden');
+                    document.getElementById(`placeholder-${index}`).classList.add('hidden');
+                    
+                    // 存入狀態
+                    imageState[index] = dataUrl;
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 清除所有圖片
+        function clearImages() {
+            if(!confirm('確定要清除所有照片重新拍攝嗎？')) return;
+            for(let i=0; i<6; i++) {
+                imageState[i] = null;
+                document.getElementById(`preview-${i}`).src = '';
+                document.getElementById(`preview-${i}`).classList.add('hidden');
+                document.getElementById(`placeholder-${i}`).classList.remove('hidden');
+                document.getElementById(`file-input-${i}`).value = '';
+            }
+        }
+
+        // 將 Blob 轉為 Base64 字串的輔助函數
+        function blobToBase64(blob) {
+            return new Promise((resolve, _) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // 產生 PDF 並上傳至 Google Drive
+        async function generateAndUploadPDF() {
+            if (imageState.includes(null)) {
+                alert('請先拍完 6 張相片再產生 PDF！');
+                return;
+            }
+
+            if (GOOGLE_APPS_SCRIPT_URL === '請替換成您的_Web_App_URL') {
+                alert('請先在程式碼中設定 GOOGLE_APPS_SCRIPT_URL');
+                return;
+            }
+
+            const publisher = document.getElementById('publisher-select').value;
+            showLoading('正在產生 PDF 並上傳，請勿關閉視窗...');
+
+            try {
+                // 1. 將圖片和書商名稱填入隱藏的 A4 樣板中
+                const labels = document.querySelectorAll('.tpl-pub-name');
+                labels.forEach(el => el.textContent = publisher);
+                
+                for(let i=0; i<6; i++) {
+                    document.getElementById(`tpl-img-${i}`).src = imageState[i];
+                }
+
+                // 2. 初始化 jsPDF
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+
+                // 3. 截圖並加入 PDF
+                const page1Obj = document.getElementById('pdf-page-1');
+                const canvas1 = await html2canvas(page1Obj, { scale: 2, useCORS: true });
+                pdf.addImage(canvas1.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, 210, 297);
+
+                pdf.addPage();
+                const page2Obj = document.getElementById('pdf-page-2');
+                const canvas2 = await html2canvas(page2Obj, { scale: 2, useCORS: true });
+                pdf.addImage(canvas2.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, 210, 297);
+
+                // 4. 取得 PDF Blob
+                const fileName = `114下_教科書驗收_${publisher}.pdf`;
+                const pdfBlob = pdf.output('blob');
+                
+                // 5. 將 PDF 轉為 Base64 準備上傳
+                const base64Data = await blobToBase64(pdfBlob);
+
+                // 6. 傳送至 Google Apps Script
+                showLoading('檔案上傳中，大約需要十幾秒...');
+                const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    redirect: 'follow', // 重要：處理 GAS 的重新導向
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8', // 避免 CORS 預檢請求錯誤
+                    },
+                    body: JSON.stringify({
+                        filename: fileName,
+                        file: base64Data
+                    })
+                });
+
+                const result = await response.json();
+                
+                hideLoading();
+
+                if (result.status === 'success') {
+                    alert('上傳成功！檔案已儲存至 Google 雲端硬碟。');
+                    // 可選：上傳成功後清空畫面準備拍下一家
+                    // clearImages(); 
+                } else {
+                    throw new Error(result.message || '上傳失敗');
+                }
+
+            } catch (error) {
+                console.error(error);
+                hideLoading();
+                alert('發生錯誤：\n' + error.message);
+            }
+        }
+
+        // 備用下載機制
+        function fallbackDownload(blob, fileName) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // UI 控制
+        function showLoading(text) {
+            document.getElementById('loading-text').textContent = text;
+            document.getElementById('loading').style.display = 'flex';
+        }
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // 啟動初始化
+        window.onload = initSlots;
+    </script>
+</body>
+</html>
