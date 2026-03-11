@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <!-- 引入 jsPDF 負責產出 PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- 引入 JSZip 用於多檔案打包下載 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         /* 隱藏的 A4 樣板，用於產生 PDF (A4 比例，96 DPI 下約 794x1123) */
         .a4-template {
@@ -91,7 +93,7 @@
         <!-- 頂部導覽列 -->
         <div class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md">
             <h1 class="text-xl font-bold text-center">鳳甲國中 教科書驗收</h1>
-            <div class="text-center text-xs text-blue-200 mt-1">版本：20260311</div>
+            <div class="text-center text-xs text-blue-200 mt-1">版本：20260311 (雲端管理版)</div>
         </div>
 
         <div class="p-4 space-y-6">
@@ -133,11 +135,17 @@
                     </svg>
                     產生 PDF 並上傳至雲端資料夾
                 </button>
-                <button onclick="generateAndDownloadPDF()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
+                <button onclick="downloadCloudPDFs()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    產生 PDF 並下載至本機裝置
+                    檢查並下載雲端 PDF
+                </button>
+                <button onclick="openDeleteModal()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    管理雲端檔案 (刪除)
                 </button>
                 <button onclick="clearImages()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition duration-200">
                     清除重拍
@@ -152,10 +160,41 @@
         </div>
     </div>
 
+    <!-- 刪除管理 Modal -->
+    <div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-2xl relative">
+            <h2 class="text-xl font-bold mb-4 text-red-600 flex items-center">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                雲端檔案管理
+            </h2>
+            
+            <!-- 密碼輸入區塊 -->
+            <div id="delete-auth-step">
+                <p class="text-sm text-gray-600 mb-2">此功能將永久刪除雲端檔案，請輸入管理員密碼：</p>
+                <input type="password" id="delete-password" class="w-full border border-gray-300 rounded p-3 mb-4 focus:ring-red-500 focus:border-red-500 outline-none" placeholder="輸入密碼 (預設: 000000)">
+                <div class="flex justify-end gap-2">
+                    <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
+                    <button onclick="verifyDeletePassword()" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">驗證</button>
+                </div>
+            </div>
+
+            <!-- 檔案列表區塊 -->
+            <div id="delete-list-step" class="hidden">
+                <p class="text-sm text-gray-600 mb-2 font-bold">點擊垃圾桶圖示永久刪除：</p>
+                <div id="cloud-file-list" class="max-h-60 overflow-y-auto border rounded p-2 mb-4 space-y-2 bg-gray-50">
+                    <!-- 檔案列表將在此動態生成 -->
+                </div>
+                <div class="flex justify-end">
+                    <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 w-full">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 載入中遮罩 -->
     <div id="loading" class="flex">
         <div class="spinner mb-4"></div>
-        <div id="loading-text" class="text-lg font-bold text-center px-4">處理中，請稍候...<br><span class="text-sm font-normal text-gray-300">產生 PDF 約需十幾秒</span></div>
+        <div id="loading-text" class="text-lg font-bold text-center px-4">處理中，請稍候...<br><span class="text-sm font-normal text-gray-300" id="loading-sub"></span></div>
     </div>
 
     <!-- 隱藏的 A4 樣板 - 第一頁 -->
@@ -195,24 +234,21 @@
             const month = now.getMonth() + 1; // 1 ~ 12 月
 
             if (month >= 2 && month <= 7) {
-                // 2月~7月: 算前一年的下學期 (例：115/2 ~ 115/7 = 114下)
+                // 2月~7月: 算前一年的下學期
                 currentAcademicYearStr = (rocYear - 1).toString();
                 currentSemesterShort = "下";
             } else if (month === 1) {
-                // 1月: 算前一年的上學期 (例：116/1 = 115上)
+                // 1月: 算前一年的上學期
                 currentAcademicYearStr = (rocYear - 1).toString();
                 currentSemesterShort = "上";
             } else {
-                // 8月~12月: 算當年的上學期 (例：115/8 ~ 115/12 = 115上)
+                // 8月~12月: 算當年的上學期
                 currentAcademicYearStr = rocYear.toString();
                 currentSemesterShort = "上";
             }
 
             const termString = `${currentAcademicYearStr}學年度${currentSemesterShort}學期`;
-            
-            // 更新 UI 提示
             document.getElementById('ui-academic-term').textContent = termString;
-            // 更新 PDF 標題樣板
             document.getElementById('pdf-academic-term').textContent = termString;
         }
 
@@ -222,8 +258,6 @@
             if (newPubName && newPubName.trim() !== '') {
                 const select = document.getElementById('publisher-select');
                 const cleanName = newPubName.trim();
-                
-                // 檢查是否已經存在相同名稱
                 let exists = false;
                 for (let i = 0; i < select.options.length; i++) {
                     if (select.options[i].value === cleanName) {
@@ -232,31 +266,26 @@
                         break;
                     }
                 }
-                
-                // 如果不存在，則加入並設定為選中狀態
                 if (!exists) {
                     const option = document.createElement('option');
                     option.value = cleanName;
                     option.text = cleanName;
                     select.add(option);
                     select.value = cleanName;
-                    saveCustomPublishers(); // 儲存到瀏覽器記憶
+                    saveCustomPublishers();
                 }
             }
         }
 
-        // 儲存自訂書商到 LocalStorage
+        // 儲存與載入自訂書商
         function saveCustomPublishers() {
             const select = document.getElementById('publisher-select');
             const customPubs = [];
-            // 預設有 5 個書商 (index 0~4)，從 index 5 開始都是自訂的
             for (let i = 5; i < select.options.length; i++) {
                 customPubs.push(select.options[i].value);
             }
             localStorage.setItem('customPublishers', JSON.stringify(customPubs));
         }
-
-        // 載入之前自訂過的書商
         function loadCustomPublishers() {
             const saved = localStorage.getItem('customPublishers');
             if (saved) {
@@ -292,39 +321,31 @@
             }
         }
 
-        // 處理圖片選擇與壓縮
         function handleImageSelect(event, index) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                // 使用 Canvas 進行圖片壓縮，避免產出的 PDF 過大上傳失敗
                 const img = new Image();
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1000; // 壓縮最大寬度
+                    const MAX_WIDTH = 1000; 
                     let width = img.width;
                     let height = img.height;
-
                     if (width > MAX_WIDTH) {
                         height *= MAX_WIDTH / width;
                         width = MAX_WIDTH;
                     }
-
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7); // 70% 品質 JPEG
-                    
-                    // 顯示預覽
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7); 
                     document.getElementById(`preview-${index}`).src = dataUrl;
                     document.getElementById(`preview-${index}`).classList.remove('hidden');
                     document.getElementById(`placeholder-${index}`).classList.add('hidden');
-                    
-                    // 存入狀態
                     imageState[index] = dataUrl;
                 };
                 img.src = e.target.result;
@@ -332,7 +353,6 @@
             reader.readAsDataURL(file);
         }
 
-        // 清除所有圖片
         function clearImages() {
             if(!confirm('確定要清除所有照片重新拍攝嗎？')) return;
             for(let i=0; i<6; i++) {
@@ -344,7 +364,6 @@
             }
         }
 
-        // 將 Blob 轉為 Base64 字串的輔助函數
         function blobToBase64(blob) {
             return new Promise((resolve, _) => {
                 const reader = new FileReader();
@@ -353,124 +372,73 @@
             });
         }
 
-        // 內部共用的 PDF 產生邏輯 (避免重複程式碼)
+        // 輔助函數：將 Base64 轉回 Blob (用於單一檔案下載)
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
+            return new Blob(byteArrays, {type: mimeType});
+        }
+
         async function buildPDFDocument() {
             const publisher = document.getElementById('publisher-select').value;
-            
-            // 1. 將圖片和書商名稱填入隱藏的 A4 樣板中
             const labels = document.querySelectorAll('.tpl-pub-name');
             labels.forEach(el => el.textContent = publisher);
-            
             for(let i=0; i<6; i++) {
                 document.getElementById(`tpl-img-${i}`).src = imageState[i];
             }
-
-            // 2. 初始化 jsPDF
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF('p', 'mm', 'a4');
-
-            // 3. 截圖第一頁
             const page1Obj = document.getElementById('pdf-page-1');
             const canvas1 = await html2canvas(page1Obj, { scale: 2, useCORS: true });
             pdf.addImage(canvas1.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, 210, 297);
-
-            // 4. 截圖第二頁
             pdf.addPage();
             const page2Obj = document.getElementById('pdf-page-2');
             const canvas2 = await html2canvas(page2Obj, { scale: 2, useCORS: true });
             pdf.addImage(canvas2.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, 210, 297);
-            
             return { pdf, publisher };
         }
 
-        // ★ 新增功能：產生 PDF 並下載至本機裝置
-        async function generateAndDownloadPDF() {
-            if (imageState.includes(null)) {
-                alert('請先拍完 6 張相片再產生 PDF！');
-                return;
-            }
-            showLoading('正在產生 PDF 排版，請稍候...');
-
-            try {
-                const { pdf, publisher } = await buildPDFDocument();
-                const fileName = `${currentAcademicYearStr}${currentSemesterShort}_教科書驗收_${publisher}.pdf`;
-                
-                hideLoading();
-
-                // 嘗試使用桌面版瀏覽器的 File System Access API (可選擇儲存資料夾)
-                if (window.showSaveFilePicker) {
-                    try {
-                        const pdfBlob = pdf.output('blob');
-                        const fileHandle = await window.showSaveFilePicker({
-                            suggestedName: fileName,
-                            types: [{
-                                description: 'PDF 檔案',
-                                accept: { 'application/pdf': ['.pdf'] },
-                            }],
-                        });
-                        const writable = await fileHandle.createWritable();
-                        await writable.write(pdfBlob);
-                        await writable.close();
-                        alert(`下載成功！\n檔名為：${fileName}`);
-                        return; // 如果成功選擇路徑並存檔，就提早結束
-                    } catch (err) {
-                        // 如果使用者取消選擇，或不支援，則進入下方的 fallback
-                        if (err.name !== 'AbortError') console.error(err);
-                    }
-                }
-
-                // 傳統下載方式 (手機版或是不支援上述 API 的瀏覽器會預設存入下載資料夾)
-                pdf.save(fileName);
-                alert(`已觸發下載！\n檔名為：${fileName}\n(手機版通常會預設存入系統的「下載」資料夾)`);
-
-            } catch (error) {
-                console.error('產生 PDF 下載失敗:', error);
-                hideLoading();
-                alert('發生錯誤：' + error.message);
-            }
-        }
-
-        // 產生 PDF 並上傳至 Google Drive
+        // ==========================================
+        // ★ 核心功能 1：產生並上傳 PDF 到雲端
+        // ==========================================
         async function generateAndUploadPDF() {
-            // 檢查是否6張都拍了
             if (imageState.includes(null)) {
                 alert('請先拍完 6 張相片再產生 PDF！');
                 return;
             }
-
-            showLoading('正在產生 PDF 排版，請稍候...');
-
+            showLoading('正在產生 PDF 排版...', '請稍候');
             try {
                 const { pdf, publisher } = await buildPDFDocument();
-
-                // 5. 輸出 PDF 為 Blob 檔案 (使用動態計算出的學年度與學期命名)
                 const fileName = `${currentAcademicYearStr}${currentSemesterShort}_教科書驗收_${publisher}.pdf`;
                 const pdfBlob = pdf.output('blob');
                 
-                // 6. 將 PDF 轉為 Base64 準備上傳
-                showLoading('正在上傳至雲端資料夾，大約需要 10~20 秒...');
+                showLoading('上傳至雲端資料夾...', '大約需要 10~20 秒');
                 const base64Data = await blobToBase64(pdfBlob);
 
-                // 7. 傳送至 Google Apps Script
                 const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
-                    headers: {
-                        // 使用 text/plain 避免觸發複雜的 CORS 預檢錯誤
-                        'Content-Type': 'text/plain;charset=utf-8', 
-                    },
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
+                        action: 'upload', // 指定動作
                         filename: fileName,
                         file: base64Data
                     })
                 });
 
                 const result = await response.json();
-                
                 hideLoading();
 
                 if (result.status === 'success') {
-                    alert(`上傳成功！\n【${publisher}】的驗收檔案已儲存至 Google 雲端硬碟。\n檔名為：${fileName}`);
-                    // 上傳成功後自動清空畫面，準備拍下一家
+                    alert(`上傳成功！\n【${publisher}】的驗收檔案已儲存至 Google 雲端硬碟。`);
                     for(let i=0; i<6; i++) {
                         imageState[i] = null;
                         document.getElementById(`preview-${i}`).src = '';
@@ -481,17 +449,195 @@
                 } else {
                     throw new Error(result.message || '伺服器回應錯誤');
                 }
+            } catch (error) {
+                console.error(error);
+                hideLoading();
+                alert('發生錯誤：' + error.message);
+            }
+        }
+
+        // ==========================================
+        // ★ 核心功能 2：檢查並下載雲端 PDF
+        // ==========================================
+        async function downloadCloudPDFs() {
+            showLoading('正在檢查雲端檔案...', '');
+            try {
+                // 1. 取得檔案列表
+                const resList = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'list' })
+                });
+                const dataList = await resList.json();
+                
+                if (dataList.status !== 'success') throw new Error(dataList.message);
+                if (dataList.files.length === 0) {
+                    hideLoading();
+                    alert('雲端資料夾內目前沒有任何 PDF 檔案！');
+                    return;
+                }
+
+                hideLoading();
+                if (!confirm(`在雲端發現 ${dataList.files.length} 個 PDF 檔案，是否要下載？`)) return;
+
+                // 2. 嘗試使用 File System Access API (支援讓使用者選資料夾)
+                if (window.showDirectoryPicker) {
+                    try {
+                        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                        for (let i = 0; i < dataList.files.length; i++) {
+                            const f = dataList.files[i];
+                            showLoading(`下載中 (${i+1}/${dataList.files.length})...`, f.name);
+                            
+                            const resDl = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                body: JSON.stringify({ action: 'download', fileId: f.id })
+                            });
+                            const dlData = await resDl.json();
+                            
+                            const blob = base64ToBlob(dlData.fileData, 'application/pdf');
+                            const fileHandle = await dirHandle.getFileHandle(f.name, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                        }
+                        hideLoading();
+                        alert("全部下載完成！");
+                        return; // 成功儲存則結束
+                    } catch (err) {
+                        // 若使用者取消選擇目錄或瀏覽器不允許，則退回 ZIP 模式
+                        if (err.name !== 'AbortError') console.error('Directory Picker Error:', err);
+                    }
+                }
+
+                // 3. Fallback: 將所有檔案打包成 ZIP 下載 (最相容手機和各種瀏覽器)
+                showLoading('準備壓縮檔中...', '這需要一點時間，請勿關閉視窗');
+                const zip = new JSZip();
+                
+                for (let i = 0; i < dataList.files.length; i++) {
+                    const f = dataList.files[i];
+                    showLoading(`抓取檔案中 (${i+1}/${dataList.files.length})...`, f.name);
+                    
+                    const resDl = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'download', fileId: f.id })
+                    });
+                    const dlData = await resDl.json();
+                    zip.file(f.name, dlData.fileData, {base64: true});
+                }
+                
+                showLoading('正在產生 ZIP 壓縮檔...', '');
+                const zipContent = await zip.generateAsync({type:"blob"});
+                const url = URL.createObjectURL(zipContent);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `教科書驗收_雲端備份_${new Date().getTime()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                hideLoading();
+                alert("已觸發下載！多個檔案已打包為 ZIP 格式。");
 
             } catch (error) {
-                console.error('上傳失敗詳細錯誤:', error);
+                console.error(error);
                 hideLoading();
-                alert('發生錯誤：' + error.message + '\n\n可能原因：網頁未部署在 HTTPS 或網路中斷，請稍後重試。');
+                alert('下載時發生錯誤：' + error.message);
+            }
+        }
+
+        // ==========================================
+        // ★ 核心功能 3：刪除管理 Modal 功能
+        // ==========================================
+        function openDeleteModal() {
+            document.getElementById('delete-modal').classList.remove('hidden');
+            document.getElementById('delete-auth-step').classList.remove('hidden');
+            document.getElementById('delete-list-step').classList.add('hidden');
+            document.getElementById('delete-password').value = '';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').classList.add('hidden');
+        }
+
+        async function verifyDeletePassword() {
+            const pwd = document.getElementById('delete-password').value;
+            if (pwd === '000000') {
+                document.getElementById('delete-auth-step').classList.add('hidden');
+                document.getElementById('delete-list-step').classList.remove('hidden');
+                await loadCloudFilesForDelete();
+            } else {
+                alert('密碼錯誤！請重新輸入。');
+            }
+        }
+
+        async function loadCloudFilesForDelete() {
+            const listContainer = document.getElementById('cloud-file-list');
+            listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">正在載入雲端檔案列表...</p>';
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'list' })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    if (data.files.length === 0) {
+                        listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">目前沒有任何檔案</p>';
+                        return;
+                    }
+                    listContainer.innerHTML = '';
+                    data.files.forEach(f => {
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between items-center bg-white p-2 rounded border border-gray-200 shadow-sm';
+                        div.innerHTML = `
+                            <span class="text-sm truncate mr-2 flex-1 text-gray-700" title="${f.name}">${f.name}</span>
+                            <button onclick="deleteCloudFile('${f.id}', '${f.name}')" class="text-red-500 hover:bg-red-100 p-2 rounded-full shrink-0 transition" title="刪除">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        `;
+                        listContainer.appendChild(div);
+                    });
+                } else {
+                    listContainer.innerHTML = `<p class="text-red-500 text-sm">載入失敗: ${data.message}</p>`;
+                }
+            } catch(e) {
+                listContainer.innerHTML = `<p class="text-red-500 text-sm">發生錯誤: ${e.message}</p>`;
+            }
+        }
+
+        async function deleteCloudFile(id, name) {
+            if (!confirm(`警告！\n\n確定要永久刪除「${name}」嗎？\n此動作將移至垃圾桶且無法復原！`)) return;
+            
+            showLoading('正在刪除...', name);
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'delete', fileId: id })
+                });
+                const data = await res.json();
+                hideLoading();
+                
+                if (data.status === 'success') {
+                    // 重新載入列表
+                    await loadCloudFilesForDelete(); 
+                } else {
+                    alert('刪除失敗: ' + data.message);
+                }
+            } catch(e) {
+                hideLoading();
+                alert('發生錯誤: ' + e.message);
             }
         }
 
         // UI 控制
-        function showLoading(text) {
-            document.getElementById('loading-text').innerHTML = text + '<br><span class="text-sm font-normal text-gray-300">處理約需十幾秒</span>';
+        function showLoading(text, subtext) {
+            document.getElementById('loading-text').childNodes[0].nodeValue = text;
+            document.getElementById('loading-sub').textContent = subtext;
             document.getElementById('loading').style.display = 'flex';
         }
         function hideLoading() {
@@ -500,9 +646,9 @@
 
         // 啟動初始化
         window.onload = function() {
-            initAcademicTerm(); // 先計算學年度
-            loadCustomPublishers(); // 載入自訂的書商 (如果有)
-            initSlots();        // 初始化上傳區塊
+            initAcademicTerm(); 
+            loadCustomPublishers(); 
+            initSlots();        
         };
     </script>
 </body>
