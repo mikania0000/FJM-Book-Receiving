@@ -86,7 +86,7 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* 🆕 登入畫面樣式 */
+        /* 登入畫面樣式 */
         #login-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #f3f4f6; z-index: 99999;
@@ -101,7 +101,7 @@
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800 pb-20">
 
-    <!-- 🆕 登入畫面 -->
+    <!-- 登入畫面 -->
     <div id="login-screen">
         <div class="login-box">
             <h1 class="text-2xl font-bold text-blue-600 mb-2">教科書驗收系統</h1>
@@ -115,7 +115,7 @@
                  data-auto_prompt="false">
             </div>
             
-            <!-- 加入外層 div 讓按鈕強制置中 -->
+            <!-- 置中對齊的登入按鈕 -->
             <div style="display: flex; justify-content: center;">
                 <div class="g_id_signin"
                      data-type="standard"
@@ -136,8 +136,8 @@
         <!-- 頂部導覽列 -->
         <div class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md relative">
             <h1 class="text-xl font-bold text-center">鳳甲國中 教科書驗收</h1>
-            <div class="text-center text-xs text-blue-200 mt-1">版本：20260311 (雲端管理版)</div>
-            <!-- 🆕 登出按鈕 -->
+            <div class="text-center text-xs text-blue-200 mt-1">版本：20260312 (雲端管理版)</div>
+            <!-- 登出按鈕 -->
             <button onclick="logout()" class="absolute right-4 top-4 bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition">登出</button>
         </div>
 
@@ -194,7 +194,7 @@
                         </svg>
                         檔案刪除
                     </button>
-                    <!-- 🆕 帳號管理按鈕 -->
+                    <!-- 帳號管理按鈕 -->
                     <button onclick="openAccountModal()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-2 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -248,7 +248,7 @@
         </div>
     </div>
 
-    <!-- 🆕 帳號管理 Modal -->
+    <!-- 帳號管理 Modal -->
     <div id="account-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50 p-4">
         <div class="bg-white rounded-lg p-6 w-full max-w-lg shadow-2xl relative flex flex-col max-h-[85vh]">
             <h2 class="text-xl font-bold mb-4 text-purple-600 flex items-center">
@@ -316,11 +316,10 @@
     </div>
 
     <script>
-        // ★ 已經整合您專屬的 Google Apps Script 網址 ★
-        // 🚨 若您有重新部署 GS，請記得更新這個 URL
+        // ★ 使用您提供的部署 ID ★
         const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxLaHMD45PfrLFBGAwTzElsmgiIarqJsOjbBeTItgDE0ZQydgjcPARUz6tlwFM4JJV8/exec';
 
-        // ---------------- 🆕 登入與記憶功能 ----------------
+        // ---------------- 登入與記憶功能 ----------------
         function decodeJwtResponse(token) {
             try {
                 let base64Url = token.split('.')[1];
@@ -348,17 +347,23 @@
                     });
                     const data = await res.json();
                     
-                    if (data.status === 'success' && data.authorized) {
-                        // 驗證成功，記憶於瀏覽器
-                        localStorage.setItem('authEmailBookApp', payload.email);
-                        startApp(payload.email);
+                    if (data.status === 'success') {
+                        if (data.authorized) {
+                            // 驗證成功，記憶於瀏覽器
+                            localStorage.setItem('authEmailBookApp', payload.email);
+                            startApp(payload.email);
+                        } else {
+                            msgEl.textContent = `❌ 帳號 ${payload.email} 無訪問權限`;
+                            msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                            localStorage.removeItem('authEmailBookApp');
+                        }
                     } else {
-                        msgEl.textContent = `❌ 帳號 ${payload.email} 無訪問權限`;
+                        // 精確顯示後端傳來的錯誤
+                        msgEl.textContent = `⚠️ 系統錯誤: ${data.message}`;
                         msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
-                        localStorage.removeItem('authEmailBookApp');
                     }
                 } catch (err) {
-                    msgEl.textContent = "連線驗證失敗，請重試";
+                    msgEl.textContent = "連線驗證失敗，請檢查網路狀態";
                     msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
                 }
             }
@@ -379,9 +384,12 @@
                 })
                 .then(r => r.json())
                 .then(data => {
-                    if (!data.authorized) {
+                    // 如果後端正常回傳，且 authorized 為 false，代表被移出白名單
+                    if (data.status === 'success' && !data.authorized) {
                         alert("您的授權已被取消，請重新登入！");
                         logout();
+                    } else if (data.status === 'error') {
+                        console.error('背景驗證系統錯誤:', data.message);
                     }
                 }).catch(e => console.log('背景驗證中斷'));
 
@@ -408,7 +416,7 @@
             initSlots(); 
         }
 
-        // ---------------- 🆕 帳號管理邏輯 ----------------
+        // ---------------- 帳號管理邏輯 ----------------
         function openAccountModal() {
             document.getElementById('account-modal').classList.remove('hidden');
             document.getElementById('new-account-email').value = '';
@@ -431,6 +439,11 @@
                 const data = await res.json();
                 
                 container.innerHTML = '';
+                if (data.status === 'error') {
+                    container.innerHTML = `<p class="text-center text-red-500 py-4 text-sm">${data.message}</p>`;
+                    return;
+                }
+
                 if (data.data.length === 0) {
                     container.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">無任何帳號資料</p>';
                     return;
@@ -527,7 +540,6 @@
             } catch(e) { hideLoading(); }
         }
 
-
         // ---------------- 原有系統功能 ----------------
         const imageState = [null, null, null, null, null, null]; 
         let currentAcademicYearStr = ""; 
@@ -551,7 +563,7 @@
                 inputEl.value = '';
                 cancelBtn.classList.add('hidden');
                 
-                if (title && (title.includes('警告') || title.includes('錯誤'))) {
+                if (title && (title.includes('警告') || title.includes('錯誤') || title.includes('失敗'))) {
                     okBtn.className = 'px-5 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition focus:outline-none shadow-sm';
                     titleEl.className = 'text-xl font-bold mb-4 text-red-600 flex items-center';
                 } else {
