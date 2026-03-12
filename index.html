@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <!-- 引入 jsPDF 負責產出 PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- 🆕 引入 Google Sign-In API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         /* 隱藏的 A4 樣板，用於產生 PDF (A4 比例，96 DPI 下約 794x1123) */
         .a4-template {
@@ -83,15 +85,60 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 🆕 登入畫面樣式 */
+        #login-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #f3f4f6; z-index: 99999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .login-box {
+            background: white; padding: 40px; border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center;
+            width: 90%; max-width: 400px; border: 2px solid #e5e7eb;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800 pb-20">
 
-    <div class="max-w-md mx-auto bg-white min-h-screen shadow-md relative">
+    <!-- 🆕 登入畫面 -->
+    <div id="login-screen">
+        <div class="login-box">
+            <h1 class="text-2xl font-bold text-blue-600 mb-2">教科書驗收系統</h1>
+            <p class="text-gray-500 mb-6 text-sm">請使用 Google 帳號登入<br><span class="text-xs">(需管理員白名單授權)</span></p>
+            
+            <div id="g_id_onload"
+                 data-client_id="553016940521-araovlp30ctbqn6um5rr49q3es5jm4jg.apps.googleusercontent.com"
+                 data-context="signin"
+                 data-ux_mode="popup"
+                 data-callback="handleCredentialResponse"
+                 data-auto_prompt="false">
+            </div>
+            
+            <!-- 加入外層 div 讓按鈕強制置中 -->
+            <div style="display: flex; justify-content: center;">
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-shape="rectangular"
+                     data-theme="outline"
+                     data-text="signin_with"
+                     data-size="large"
+                     data-logo_alignment="center">
+                </div>
+            </div>
+            
+            <div id="login-msg" class="mt-4 font-bold text-red-500 min-h-[24px]"></div>
+        </div>
+    </div>
+
+    <!-- 系統主畫面 (預設隱藏) -->
+    <div id="main-app" class="max-w-md mx-auto bg-white min-h-screen shadow-md relative" style="display: none;">
         <!-- 頂部導覽列 -->
-        <div class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md">
+        <div class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md relative">
             <h1 class="text-xl font-bold text-center">鳳甲國中 教科書驗收</h1>
             <div class="text-center text-xs text-blue-200 mt-1">版本：20260311 (雲端管理版)</div>
+            <!-- 🆕 登出按鈕 -->
+            <button onclick="logout()" class="absolute right-4 top-4 bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition">登出</button>
         </div>
 
         <div class="p-4 space-y-6">
@@ -139,12 +186,23 @@
                     </svg>
                     檢查並下載雲端 PDF
                 </button>
-                <button onclick="openDeleteModal()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    管理雲端檔案 (刪除)
-                </button>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="openDeleteModal()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-2 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        檔案刪除
+                    </button>
+                    <!-- 🆕 帳號管理按鈕 -->
+                    <button onclick="openAccountModal()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-2 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        帳號管理
+                    </button>
+                </div>
+
                 <button onclick="clearImages()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition duration-200">
                     清除重拍
                 </button>
@@ -186,6 +244,30 @@
                     <button onclick="deleteAllCloudFiles()" id="delete-all-btn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 w-full font-bold hidden">全部刪除</button>
                     <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 w-full font-bold">關閉</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🆕 帳號管理 Modal -->
+    <div id="account-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-lg shadow-2xl relative flex flex-col max-h-[85vh]">
+            <h2 class="text-xl font-bold mb-4 text-purple-600 flex items-center">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                白名單帳號管理
+            </h2>
+            
+            <div class="flex gap-2 mb-4 shrink-0">
+                <input type="text" id="new-account-email" class="flex-1 border border-gray-300 rounded p-2 focus:ring-purple-500 focus:border-purple-500 outline-none" placeholder="輸入新增的 Google 帳號">
+                <button onclick="addAccount()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 font-bold whitespace-nowrap">新增</button>
+            </div>
+
+            <div class="overflow-y-auto flex-1 border rounded bg-gray-50 p-2 space-y-2" id="account-list-container">
+                <!-- 帳號列表動態生成 -->
+                <p class="text-center text-gray-500 py-4 text-sm">載入中...</p>
+            </div>
+
+            <div class="mt-4 flex justify-end shrink-0">
+                <button onclick="closeAccountModal()" class="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold w-full">關閉</button>
             </div>
         </div>
     </div>
@@ -235,17 +317,224 @@
 
     <script>
         // ★ 已經整合您專屬的 Google Apps Script 網址 ★
+        // 🚨 若您有重新部署 GS，請記得更新這個 URL
         const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxLaHMD45PfrLFBGAwTzElsmgiIarqJsOjbBeTItgDE0ZQydgjcPARUz6tlwFM4JJV8/exec';
 
-        const imageState = [null, null, null, null, null, null]; // 儲存 6 張照片的 Base64
-        let currentAcademicYearStr = ""; // 儲存計算出的學年度 (例如: 114)
-        let currentSemesterShort = "";   // 儲存計算出的學期 (例如: 下)
-        let adminPwd = ""; // 暫存通過驗證的密碼，供刪除時使用
-        let currentCloudFiles = []; // 暫存目前的檔案清單，供全部刪除使用
+        // ---------------- 🆕 登入與記憶功能 ----------------
+        function decodeJwtResponse(token) {
+            try {
+                let base64Url = token.split('.')[1];
+                let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                let jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                return null;
+            }
+        }
 
-        // ==========================================
-        // ★ 自訂 Modal 核心邏輯 (取代 alert/confirm/prompt)
-        // ==========================================
+        async function handleCredentialResponse(response) {
+            const payload = decodeJwtResponse(response.credential);
+            if (payload && payload.email) {
+                const msgEl = document.getElementById('login-msg');
+                msgEl.textContent = "驗證白名單授權中...";
+                msgEl.className = "mt-4 font-bold text-blue-500 min-h-[24px]";
+                try {
+                    const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'verifyLogin', email: payload.email })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.status === 'success' && data.authorized) {
+                        // 驗證成功，記憶於瀏覽器
+                        localStorage.setItem('authEmailBookApp', payload.email);
+                        startApp(payload.email);
+                    } else {
+                        msgEl.textContent = `❌ 帳號 ${payload.email} 無訪問權限`;
+                        msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                        localStorage.removeItem('authEmailBookApp');
+                    }
+                } catch (err) {
+                    msgEl.textContent = "連線驗證失敗，請重試";
+                    msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                }
+            }
+        }
+
+        function checkLoginStatus() {
+            const savedEmail = localStorage.getItem('authEmailBookApp');
+            if (savedEmail) {
+                // 已有記憶，先隱藏登入並顯示主畫面
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'block';
+                
+                // 背景再確認一次，防止名單被刪除後仍能進入
+                fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'verifyLogin', email: savedEmail })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.authorized) {
+                        alert("您的授權已被取消，請重新登入！");
+                        logout();
+                    }
+                }).catch(e => console.log('背景驗證中斷'));
+
+                startApp(savedEmail);
+            } else {
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('main-app').style.display = 'none';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('authEmailBookApp');
+            location.reload();
+        }
+
+        // 啟動系統的主要函式 (登入後執行)
+        function startApp(email) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            
+            // 載入系統初始資料
+            initAcademicTerm(); 
+            loadCustomPublishers(); 
+            initSlots(); 
+        }
+
+        // ---------------- 🆕 帳號管理邏輯 ----------------
+        function openAccountModal() {
+            document.getElementById('account-modal').classList.remove('hidden');
+            document.getElementById('new-account-email').value = '';
+            loadAccounts();
+        }
+
+        function closeAccountModal() {
+            document.getElementById('account-modal').classList.add('hidden');
+        }
+
+        async function loadAccounts() {
+            const container = document.getElementById('account-list-container');
+            container.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">⏳ 載入中...</p>';
+            
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'getWhitelist' })
+                });
+                const data = await res.json();
+                
+                container.innerHTML = '';
+                if (data.data.length === 0) {
+                    container.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">無任何帳號資料</p>';
+                    return;
+                }
+                
+                data.data.forEach(email => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center bg-white p-3 rounded shadow-sm border border-gray-200 gap-2';
+                    div.innerHTML = `
+                        <div class="flex-1 overflow-hidden" data-email="${email}">
+                            <span class="text-gray-800 font-medium truncate block email-text">${email}</span>
+                        </div>
+                        <div class="flex shrink-0 gap-1">
+                            <button onclick="startEditAccount(this, '${email}')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition">修改</button>
+                            <button onclick="deleteAccount('${email}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition">刪除</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch(e) {
+                container.innerHTML = '<p class="text-center text-red-500 py-4 text-sm">載入失敗</p>';
+            }
+        }
+
+        async function addAccount() {
+            const input = document.getElementById('new-account-email');
+            const email = input.value.trim();
+            if(!email) { await customAlert('請輸入 Email', '提示'); return; }
+            
+            showLoading('新增帳號中...', '');
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'addWhitelist', email: email })
+                });
+                const data = await res.json();
+                hideLoading();
+                if(data.status === 'success') {
+                    input.value = '';
+                    loadAccounts();
+                } else {
+                    await customAlert(data.message, '錯誤');
+                }
+            } catch(e) { hideLoading(); }
+        }
+
+        function startEditAccount(btn, oldEmail) {
+            const div = btn.closest('.flex.justify-between');
+            const textContainer = div.querySelector('div[data-email]');
+            textContainer.innerHTML = `<input type="text" value="${oldEmail}" class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-purple-500 focus:border-purple-500 outline-none">`;
+            
+            btn.textContent = "儲存";
+            btn.className = "bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition";
+            btn.onclick = function() { saveEditAccount(this, oldEmail, textContainer); };
+        }
+
+        async function saveEditAccount(btn, oldEmail, textContainer) {
+            const newEmail = textContainer.querySelector('input').value.trim();
+            if(!newEmail) return;
+
+            showLoading('更新帳號中...', '');
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'updateWhitelist', oldEmail: oldEmail, newEmail: newEmail })
+                });
+                const data = await res.json();
+                hideLoading();
+                if(data.status === 'success') {
+                    loadAccounts();
+                } else {
+                    await customAlert(data.message, '錯誤');
+                    loadAccounts();
+                }
+            } catch(e) { hideLoading(); }
+        }
+
+        async function deleteAccount(email) {
+            if (!(await customConfirm(`確定要刪除帳號 ${email} 嗎？`, '刪除帳號'))) return;
+            
+            showLoading('刪除帳號中...', '');
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'deleteWhitelist', email: email })
+                });
+                const data = await res.json();
+                hideLoading();
+                if(data.status === 'success') {
+                    loadAccounts();
+                } else {
+                    await customAlert(data.message, '錯誤');
+                }
+            } catch(e) { hideLoading(); }
+        }
+
+
+        // ---------------- 原有系統功能 ----------------
+        const imageState = [null, null, null, null, null, null]; 
+        let currentAcademicYearStr = ""; 
+        let currentSemesterShort = "";   
+        let adminPwd = ""; 
+        let currentCloudFiles = []; 
+
         function showCustomModal({ title, message, type = 'alert' }) {
             return new Promise((resolve) => {
                 const modal = document.getElementById('custom-modal');
@@ -258,12 +547,10 @@
                 titleEl.textContent = title || '提示';
                 msgEl.textContent = message;
 
-                // Reset UI
                 inputEl.classList.add('hidden');
                 inputEl.value = '';
                 cancelBtn.classList.add('hidden');
                 
-                // Adjust colors based on title (Optional enhancement for warnings)
                 if (title && (title.includes('警告') || title.includes('錯誤'))) {
                     okBtn.className = 'px-5 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition focus:outline-none shadow-sm';
                     titleEl.className = 'text-xl font-bold mb-4 text-red-600 flex items-center';
@@ -304,23 +591,18 @@
         const customConfirm = (msg, title) => showCustomModal({ message: msg, title: title || '確認', type: 'confirm' });
         const customPrompt = (msg, title) => showCustomModal({ message: msg, title: title || '輸入', type: 'prompt' });
 
-
-        // 計算並設定當前學年度與學期
         function initAcademicTerm() {
             const now = new Date();
-            const rocYear = now.getFullYear() - 1911; // 換算民國年
-            const month = now.getMonth() + 1; // 1 ~ 12 月
+            const rocYear = now.getFullYear() - 1911; 
+            const month = now.getMonth() + 1; 
 
             if (month >= 2 && month <= 7) {
-                // 2月~7月: 算前一年的下學期
                 currentAcademicYearStr = (rocYear - 1).toString();
                 currentSemesterShort = "下";
             } else if (month === 1) {
-                // 1月: 算前一年的上學期
                 currentAcademicYearStr = (rocYear - 1).toString();
                 currentSemesterShort = "上";
             } else {
-                // 8月~12月: 算當年的上學期
                 currentAcademicYearStr = rocYear.toString();
                 currentSemesterShort = "上";
             }
@@ -330,7 +612,6 @@
             document.getElementById('pdf-academic-term').textContent = termString;
         }
 
-        // 新增自訂書商功能
         async function addNewPublisher() {
             const newPubName = await customPrompt('請輸入新增的書商名稱：', '新增書商');
             if (newPubName && newPubName.trim() !== '') {
@@ -355,7 +636,6 @@
             }
         }
 
-        // 儲存與載入自訂書商
         function saveCustomPublishers() {
             const select = document.getElementById('publisher-select');
             const customPubs = [];
@@ -378,7 +658,6 @@
             }
         }
 
-        // 初始化上傳介面
         function initSlots() {
             const container = document.getElementById('upload-slots');
             container.innerHTML = '';
@@ -450,7 +729,6 @@
             });
         }
 
-        // 輔助函數：將 Base64 轉回 Blob (用於單一檔案下載)
         function base64ToBlob(base64, mimeType) {
             const byteCharacters = atob(base64);
             const byteArrays = [];
@@ -485,9 +763,6 @@
             return { pdf, publisher };
         }
 
-        // ==========================================
-        // ★ 核心功能 1：產生並上傳 PDF 到雲端
-        // ==========================================
         async function generateAndUploadPDF() {
             if (imageState.includes(null)) {
                 await customAlert('請先拍完 6 張相片再產生 PDF！', '資料未完整');
@@ -496,7 +771,6 @@
             showLoading('正在產生 PDF 排版...', '請稍候');
             try {
                 const { pdf, publisher } = await buildPDFDocument();
-                // ★ 這裡確保檔名包含「教科書驗收相片」
                 const fileName = `${currentAcademicYearStr}${currentSemesterShort}_教科書驗收相片_${publisher}.pdf`;
                 const pdfBlob = pdf.output('blob');
                 
@@ -507,7 +781,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
-                        action: 'upload', // 指定動作
+                        action: 'upload',
                         filename: fileName,
                         file: base64Data
                     })
@@ -535,13 +809,9 @@
             }
         }
 
-        // ==========================================
-        // ★ 核心功能 2：檢查並下載雲端 PDF (依序個別下載)
-        // ==========================================
         async function downloadCloudPDFs() {
             showLoading('正在檢查雲端檔案...', '');
             try {
-                // 1. 取得檔案列表
                 const resList = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -559,7 +829,6 @@
                 hideLoading();
                 if (!(await customConfirm(`在雲端發現 ${dataList.files.length} 個 PDF 檔案，是否要下載？\n(若瀏覽器詢問是否允許多重下載，請點擊允許)`, '下載確認'))) return;
 
-                // 2. 嘗試使用 File System Access API (支援讓使用者先選定一個資料夾，然後全部存入)
                 if (window.showDirectoryPicker) {
                     try {
                         const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -582,14 +851,12 @@
                         }
                         hideLoading();
                         await customAlert("全部下載完成！", '下載成功');
-                        return; // 成功儲存則結束
+                        return; 
                     } catch (err) {
-                        // 若取消選擇目錄或瀏覽器不支援此寫入模式，則退回下方的傳統個別下載模式
                         if (err.name !== 'AbortError') console.error('Directory Picker Error:', err);
                     }
                 }
 
-                // 3. 傳統個別下載模式 (依序呼叫瀏覽器下載功能，不再打包 ZIP)
                 for (let i = 0; i < dataList.files.length; i++) {
                     const f = dataList.files[i];
                     showLoading(`抓取檔案中 (${i+1}/${dataList.files.length})...`, f.name);
@@ -605,13 +872,12 @@
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = f.name; // 使用雲端上原本的檔名
+                    a.download = f.name; 
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     
-                    // 稍微延遲避免被瀏覽器當作廣告阻擋多次連續下載
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
                 
@@ -625,15 +891,12 @@
             }
         }
 
-        // ==========================================
-        // ★ 核心功能 3：刪除管理 Modal 功能
-        // ==========================================
         function openDeleteModal() {
             document.getElementById('delete-modal').classList.remove('hidden');
             document.getElementById('delete-auth-step').classList.remove('hidden');
             document.getElementById('delete-list-step').classList.add('hidden');
             document.getElementById('delete-password').value = '';
-            adminPwd = ""; // 開啟時清空暫存密碼
+            adminPwd = ""; 
         }
 
         function closeDeleteModal() {
@@ -653,7 +916,6 @@
             btn.disabled = true;
 
             try {
-                // 將密碼傳到 GS 後端進行驗證，並順便取得檔案列表
                 const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -662,7 +924,6 @@
                 const data = await res.json();
                 
                 if (data.status === 'success') {
-                    // 驗證成功，將密碼暫存於記憶體供稍後刪除使用
                     adminPwd = pwd; 
                     document.getElementById('delete-auth-step').classList.add('hidden');
                     document.getElementById('delete-list-step').classList.remove('hidden');
@@ -678,19 +939,18 @@
             }
         }
 
-        // 獨立出渲染列表的功能
         function renderCloudFilesForDelete(files) {
-            currentCloudFiles = files; // 存入全域變數
+            currentCloudFiles = files; 
             const listContainer = document.getElementById('cloud-file-list');
             const deleteAllBtn = document.getElementById('delete-all-btn');
 
             if (files.length === 0) {
                 listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">目前沒有任何檔案</p>';
-                deleteAllBtn.classList.add('hidden'); // 隱藏全部刪除按鈕
+                deleteAllBtn.classList.add('hidden'); 
                 return;
             }
             
-            deleteAllBtn.classList.remove('hidden'); // 顯示全部刪除按鈕
+            deleteAllBtn.classList.remove('hidden'); 
             listContainer.innerHTML = '';
             files.forEach(f => {
                 const div = document.createElement('div');
@@ -705,7 +965,6 @@
             });
         }
 
-        // 刪除完成後，重新向後端要一次檔案列表 (帶上剛剛驗證過的密碼)
         async function refreshCloudFilesForDelete() {
             const listContainer = document.getElementById('cloud-file-list');
             listContainer.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm">正在重新載入雲端檔案列表...</p>';
@@ -731,7 +990,6 @@
             
             showLoading('正在刪除...', name);
             try {
-                // 將暫存的 adminPwd 一併傳送到後端進行雙重防護
                 const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -741,7 +999,6 @@
                 hideLoading();
                 
                 if (data.status === 'success') {
-                    // 重新載入列表
                     await refreshCloudFilesForDelete(); 
                 } else {
                     await customAlert('刪除失敗: ' + (data.message || '請確認密碼是否正確'), '錯誤');
@@ -754,7 +1011,6 @@
 
         async function deleteAllCloudFiles() {
             if (!currentCloudFiles || currentCloudFiles.length === 0) return;
-
             if (!(await customConfirm(`警告！\n\n確定要永久刪除雲端上的這 ${currentCloudFiles.length} 個檔案嗎？\n此動作將移至垃圾桶且無法復原！`, '全部刪除確認'))) return;
 
             showLoading('正在全部刪除...', '請稍候，勿關閉視窗');
@@ -762,7 +1018,6 @@
                 let successCount = 0;
                 let failCount = 0;
 
-                // 依序刪除所有檔案
                 for (let i = 0; i < currentCloudFiles.length; i++) {
                     const f = currentCloudFiles[i];
                     showLoading(`正在刪除 (${i+1}/${currentCloudFiles.length})...`, f.name);
@@ -787,8 +1042,6 @@
                 } else {
                     await customAlert(`刪除作業結束。\n成功: ${successCount} 個\n失敗: ${failCount} 個`, '刪除完成 (含失敗)');
                 }
-
-                // 重新載入列表
                 await refreshCloudFilesForDelete(); 
             } catch(e) {
                 hideLoading();
@@ -796,7 +1049,6 @@
             }
         }
 
-        // UI 控制
         function showLoading(text, subtext) {
             document.getElementById('loading-text').childNodes[0].nodeValue = text;
             document.getElementById('loading-sub').textContent = subtext;
@@ -806,11 +1058,9 @@
             document.getElementById('loading').style.display = 'none';
         }
 
-        // 啟動初始化
+        // 頁面載入時檢查登入狀態
         window.onload = function() {
-            initAcademicTerm(); 
-            loadCustomPublishers(); 
-            initSlots();        
+            checkLoginStatus();
         };
     </script>
 </body>
