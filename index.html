@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>鳳甲國中教科書驗收</title>
-    <!-- 引入 Tailwind CSS 進行快速排版 -->
+    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 html2canvas 負責將排版轉為圖片 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -13,7 +13,6 @@
     <!-- 引入 Google Sign-In API -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
-        /* 隱藏的 A4 樣板，用於產生 PDF (A4 比例，96 DPI 下約 794x1123) */
         .a4-template {
             width: 794px;
             height: 1123px;
@@ -64,7 +63,6 @@
             margin-top: 5px;
             text-align: center;
         }
-        /* Loading 遮罩 */
         #loading {
             display: none;
             position: fixed;
@@ -86,7 +84,6 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* 登入畫面樣式 */
         #login-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #f3f4f6; z-index: 99999;
@@ -104,13 +101,11 @@
     <!-- 登入畫面 -->
     <div id="login-screen">
         <div class="login-box">
-            <h1 class="text-2xl font-bold text-blue-600 mb-2">教科書驗收系統</h1>
-            <p class="text-gray-500 mb-6 text-sm">請輸入密碼並使用 Google 帳號登入<br><span class="text-xs text-red-400">(雙重驗證)</span></p>
+            <h1 class="text-2xl font-bold text-blue-600 mb-6">教科書驗收系統</h1>
             
-            <input type="password" id="system-auth-pwd" class="w-full border border-gray-300 rounded p-3 mb-6 focus:ring-blue-500 focus:border-blue-500 outline-none text-center shadow-sm" placeholder="1. 請先輸入系統密碼" oninput="checkPasswordInput()">
+            <input type="password" id="system-auth-pwd" class="w-full border border-gray-300 rounded p-3 mb-6 focus:ring-blue-500 focus:border-blue-500 outline-none text-center shadow-sm" placeholder="請輸入密碼" oninput="checkPasswordInput()">
             
             <div id="google-btn-wrapper" class="opacity-50 pointer-events-none transition-opacity duration-300 relative flex flex-col items-center">
-                <div class="text-sm text-gray-500 mb-3 font-bold">2. 點擊下方按鈕進行驗證</div>
                 <div id="g_id_onload"
                      data-client_id="553016940521-araovlp30ctbqn6um5rr49q3es5jm4jg.apps.googleusercontent.com"
                      data-context="signin"
@@ -119,7 +114,6 @@
                      data-auto_prompt="false">
                 </div>
                 
-                <!-- 置中對齊的登入按鈕 -->
                 <div style="display: flex; justify-content: center;">
                     <div class="g_id_signin"
                          data-type="standard"
@@ -136,18 +130,15 @@
         </div>
     </div>
 
-    <!-- 系統主畫面 (預設隱藏) -->
+    <!-- 系統主畫面 -->
     <div id="main-app" class="max-w-md mx-auto bg-white min-h-screen shadow-md relative" style="display: none;">
-        <!-- 頂部導覽列 -->
         <div class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md relative">
             <h1 class="text-xl font-bold text-center">鳳甲國中 教科書驗收</h1>
             <div class="text-center text-xs text-blue-200 mt-1">版本：20260312 (雙重認證版)</div>
-            <!-- 登出按鈕 -->
             <button onclick="logout()" class="absolute right-4 top-4 bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition">登出</button>
         </div>
 
         <div class="p-4 space-y-6">
-            <!-- 書商選擇 -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">選擇書商：</label>
                 <div class="flex gap-2">
@@ -172,12 +163,8 @@
                 <span class="text-xs text-yellow-600 mt-1 inline-block">系統已自動換算目前為：<span id="ui-academic-term" class="font-bold"></span></span>
             </div>
 
-            <!-- 照片上傳區 -->
-            <div class="grid grid-cols-2 gap-3" id="upload-slots">
-                <!-- 由 JS 動態生成 6 個槽位 -->
-            </div>
+            <div class="grid grid-cols-2 gap-3" id="upload-slots"></div>
 
-            <!-- 操作按鈕 -->
             <div class="mt-8 space-y-3">
                 <button onclick="generateAndUploadPDF()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -199,7 +186,6 @@
                         </svg>
                         檔案刪除
                     </button>
-                    <!-- 帳號管理按鈕 -->
                     <button onclick="openAccountModal()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-2 rounded-lg shadow-lg flex justify-center items-center transition duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -228,8 +214,6 @@
                 <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 雲端檔案管理
             </h2>
-            
-            <!-- 密碼輸入區塊 -->
             <div id="delete-auth-step">
                 <p class="text-sm text-gray-600 mb-2">此功能將永久刪除雲端檔案，請輸入管理員密碼：</p>
                 <input type="password" id="delete-password" class="w-full border border-gray-300 rounded p-3 mb-4 focus:ring-red-500 focus:border-red-500 outline-none" placeholder="輸入密碼">
@@ -238,13 +222,9 @@
                     <button onclick="verifyDeletePassword()" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">驗證</button>
                 </div>
             </div>
-
-            <!-- 檔案列表區塊 -->
             <div id="delete-list-step" class="hidden">
                 <p class="text-sm text-gray-600 mb-2 font-bold">點擊垃圾桶圖示永久刪除：</p>
-                <div id="cloud-file-list" class="max-h-60 overflow-y-auto border rounded p-2 mb-4 space-y-2 bg-gray-50">
-                    <!-- 檔案列表將在此動態生成 -->
-                </div>
+                <div id="cloud-file-list" class="max-h-60 overflow-y-auto border rounded p-2 mb-4 space-y-2 bg-gray-50"></div>
                 <div class="flex gap-2">
                     <button onclick="deleteAllCloudFiles()" id="delete-all-btn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 w-full font-bold hidden">全部刪除</button>
                     <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 w-full font-bold">關閉</button>
@@ -260,17 +240,13 @@
                 <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 白名單帳號管理
             </h2>
-            
             <div class="flex gap-2 mb-4 shrink-0">
                 <input type="text" id="new-account-email" class="flex-1 border border-gray-300 rounded p-2 focus:ring-purple-500 focus:border-purple-500 outline-none" placeholder="輸入新增的 Google 帳號">
                 <button onclick="addAccount()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 font-bold whitespace-nowrap">新增</button>
             </div>
-
             <div class="overflow-y-auto flex-1 border rounded bg-gray-50 p-2 space-y-2" id="account-list-container">
-                <!-- 帳號列表動態生成 -->
                 <p class="text-center text-gray-500 py-4 text-sm">載入中...</p>
             </div>
-
             <div class="mt-4 flex justify-end shrink-0">
                 <button onclick="closeAccountModal()" class="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold w-full">關閉</button>
             </div>
@@ -280,9 +256,7 @@
     <!-- 通用自訂 Modal -->
     <div id="custom-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-[100] p-4">
         <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-2xl relative transform transition-all scale-100">
-            <h2 id="custom-modal-title" class="text-xl font-bold mb-4 text-gray-800 flex items-center">
-                提示
-            </h2>
+            <h2 id="custom-modal-title" class="text-xl font-bold mb-4 text-gray-800 flex items-center">提示</h2>
             <div id="custom-modal-message" class="text-gray-600 mb-4 whitespace-pre-line leading-relaxed"></div>
             <input type="text" id="custom-modal-input" class="hidden w-full border border-gray-300 rounded p-3 mb-4 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="">
             <div class="flex justify-end gap-3 mt-2">
@@ -298,12 +272,9 @@
         <div id="loading-text" class="text-lg font-bold text-center px-4">處理中，請稍候...<br><span class="text-sm font-normal text-gray-300" id="loading-sub"></span></div>
     </div>
 
-    <!-- 隱藏的 A4 樣板 - 第一頁 -->
+    <!-- 隱藏的 A4 樣板 -->
     <div id="pdf-page-1" class="a4-template">
-        <div class="page-title">
-            高雄市立鳳甲國民中學<br>
-            「<span id="pdf-academic-term"></span>教科書驗收相片」
-        </div>
+        <div class="page-title">高雄市立鳳甲國民中學<br>「<span id="pdf-academic-term"></span>教科書驗收相片」</div>
         <div class="grid-2x2">
             <div class="photo-box"><img id="tpl-img-0" src=""><div class="publisher-label tpl-pub-name"></div></div>
             <div class="photo-box"><img id="tpl-img-1" src=""><div class="publisher-label tpl-pub-name"></div></div>
@@ -311,8 +282,6 @@
             <div class="photo-box"><img id="tpl-img-3" src=""><div class="publisher-label tpl-pub-name"></div></div>
         </div>
     </div>
-
-    <!-- 隱藏的 A4 樣板 - 第二頁 -->
     <div id="pdf-page-2" class="a4-template">
         <div class="grid-2x1">
             <div class="photo-box"><img id="tpl-img-4" src=""><div class="publisher-label tpl-pub-name"></div></div>
@@ -321,7 +290,6 @@
     </div>
 
     <script>
-        // ★ 請確認此處為您 Google Apps Script 最新的網頁應用程式 URL ★
         const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxLaHMD45PfrLFBGAwTzElsmgiIarqJsOjbBeTItgDE0ZQydgjcPARUz6tlwFM4JJV8/exec';
 
         // ---------------- 登入與雙重認證機制 ----------------
@@ -352,7 +320,6 @@
             }
         }
 
-        // 處理 Google 回傳的 Credential 並同時送出密碼驗證
         async function handleCredentialResponse(response) {
             const pwd = document.getElementById('system-auth-pwd').value;
             const msgEl = document.getElementById('login-msg');
@@ -374,26 +341,19 @@
                 const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ 
-                        action: 'login_with_password', 
-                        email: email,
-                        password: pwd
-                    })
+                    body: JSON.stringify({ action: 'login_with_password', email: email, password: pwd })
                 });
                 const data = await res.json();
                 
                 if (data.status === 'success') {
                     if (data.authorized) {
-                        // 雙重驗證皆通過！寫入 LocalStorage 記住登入狀態 (只存 Email)
                         localStorage.setItem('authEmailBookApp', email);
                         startApp(email);
                     } else {
-                        // 密碼對了，但 Email 不在白名單
                         msgEl.textContent = `❌ 帳號 ${email} 未在授權白名單內`;
                         msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
                     }
                 } else {
-                    // 後端回傳錯誤 (通常是密碼錯誤)
                     msgEl.textContent = `⚠️ 拒絕登入: ${data.message}`;
                     msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
                 }
@@ -403,15 +363,12 @@
             }
         }
 
-        // 網頁重新整理時的背景驗證 (檢查 localStorage 是否存在，並確認仍存在於白名單)
         function checkLoginStatus() {
             const savedEmail = localStorage.getItem('authEmailBookApp');
             if (savedEmail) {
-                // 已有記憶，先隱藏登入並顯示主畫面
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-app').style.display = 'block';
                 
-                // 背景再確認一次，防止名單被刪除後仍能進入 (不需要再傳密碼，因為已經取得 session 信任)
                 fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -427,7 +384,6 @@
 
                 startApp(savedEmail);
             } else {
-                // 無記憶，確保顯示登入畫面
                 document.getElementById('login-screen').style.display = 'flex';
                 document.getElementById('main-app').style.display = 'none';
                 document.getElementById('system-auth-pwd').value = '';
@@ -440,12 +396,10 @@
             location.reload();
         }
 
-        // 啟動系統的主要函式
         function startApp(email) {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
             
-            // 載入系統初始資料
             initAcademicTerm(); 
             loadCustomPublishers(); 
             initSlots(); 
@@ -1105,7 +1059,6 @@
             document.getElementById('loading').style.display = 'none';
         }
 
-        // 頁面載入時檢查登入狀態
         window.onload = function() {
             checkLoginStatus();
         };
