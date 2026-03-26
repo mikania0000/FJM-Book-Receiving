@@ -103,7 +103,16 @@
         <div class="login-box">
             <h1 class="text-2xl font-bold text-blue-600 mb-6">教科書驗收系統</h1>
             
-            <input type="password" id="system-auth-pwd" class="w-full border border-gray-300 rounded p-3 mb-6 focus:ring-blue-500 focus:border-blue-500 outline-none text-center shadow-sm" placeholder="請輸入密碼" oninput="checkPasswordInput()">
+            <div class="relative w-full mb-6">
+                <input type="password" id="system-auth-pwd" class="w-full border border-gray-300 rounded p-3 pr-10 focus:ring-blue-500 focus:border-blue-500 outline-none text-center shadow-sm" placeholder="請輸入密碼" oninput="checkPasswordInput()">
+                <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                    <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <!-- 預設閉眼 -->
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                </button>
+            </div>
             
             <div id="google-btn-wrapper" class="opacity-50 pointer-events-none transition-opacity duration-300 relative flex flex-col items-center">
                 <div id="g_id_onload"
@@ -293,13 +302,79 @@
         const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxLaHMD45PfrLFBGAwTzElsmgiIarqJsOjbBeTItgDE0ZQydgjcPARUz6tlwFM4JJV8/exec';
 
         // ---------------- 登入與雙重認證機制 ----------------
+        let lockoutTimer = null;
+
+        function togglePasswordVisibility() {
+            const pwdInput = document.getElementById('system-auth-pwd');
+            const eyeIcon = document.getElementById('eye-icon');
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                // 顯示張眼 icon (斜線劃掉的圖示表示"顯示中可隱藏")
+                eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />`;
+            } else {
+                pwdInput.type = 'password';
+                // 恢復預設閉眼 icon
+                eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />`;
+            }
+        }
+
+        function checkLockout() {
+            const lockoutUntil = localStorage.getItem('lockoutUntil');
+            const msgEl = document.getElementById('login-msg');
+            const pwdInput = document.getElementById('system-auth-pwd');
+            const wrapper = document.getElementById('google-btn-wrapper');
+
+            if (lockoutUntil) {
+                const now = Date.now();
+                const until = parseInt(lockoutUntil, 10);
+                if (now < until) {
+                    // 鎖定狀態
+                    const remainingMins = Math.ceil((until - now) / 60000);
+                    msgEl.textContent = `輸入錯誤達 5 次，請等待 ${remainingMins} 分鐘後再試`;
+                    msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                    pwdInput.disabled = true;
+                    wrapper.classList.add('opacity-50', 'pointer-events-none');
+                    
+                    if(lockoutTimer) clearTimeout(lockoutTimer);
+                    lockoutTimer = setTimeout(checkLockout, 60000); // 每分鐘檢查更新倒數
+                    return true;
+                } else {
+                    // 解除鎖定
+                    localStorage.removeItem('lockoutUntil');
+                    localStorage.setItem('loginAttempts', '0');
+                    if(msgEl.textContent.includes("輸入錯誤達")) msgEl.textContent = "";
+                    pwdInput.disabled = false;
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        function handleLoginFailure() {
+            let attempts = parseInt(localStorage.getItem('loginAttempts') || '0', 10);
+            attempts++;
+            localStorage.setItem('loginAttempts', attempts.toString());
+            
+            if (attempts >= 5) {
+                const lockoutUntil = Date.now() + 15 * 60 * 1000; // 鎖定15分鐘
+                localStorage.setItem('lockoutUntil', lockoutUntil.toString());
+                checkLockout();
+                return true; // 返回已鎖定狀態
+            }
+            return false;
+        }
+
         function checkPasswordInput() {
+            if (checkLockout()) return; // 鎖定期間不處理後續邏輯
+
             const pwd = document.getElementById('system-auth-pwd').value;
             const wrapper = document.getElementById('google-btn-wrapper');
             const msgEl = document.getElementById('login-msg');
+            
             if (pwd.length > 0) {
                 wrapper.classList.remove('opacity-50', 'pointer-events-none');
-                if (msgEl.textContent === "請先輸入系統認證密碼！") {
+                // 若輸入密碼，則清除原有的錯誤提示
+                if (msgEl.textContent === "請先輸入系統認證密碼！" || msgEl.textContent.includes("拒絕登入") || msgEl.textContent.includes("未在授權白名單內")) {
                     msgEl.textContent = "";
                 }
             } else {
@@ -321,6 +396,8 @@
         }
 
         async function handleCredentialResponse(response) {
+            if (checkLockout()) return; // 若已被鎖定，阻攔發送
+
             const pwd = document.getElementById('system-auth-pwd').value;
             const msgEl = document.getElementById('login-msg');
 
@@ -347,15 +424,26 @@
                 
                 if (data.status === 'success') {
                     if (data.authorized) {
+                        // 登入成功，重置失敗次數
+                        localStorage.removeItem('loginAttempts');
+                        localStorage.removeItem('lockoutUntil');
                         localStorage.setItem('authEmailBookApp', email);
                         startApp(email);
                     } else {
-                        msgEl.textContent = `❌ 帳號 ${email} 未在授權白名單內`;
-                        msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                        const isLocked = handleLoginFailure();
+                        if (!isLocked) {
+                            let remain = 5 - parseInt(localStorage.getItem('loginAttempts') || '0', 10);
+                            msgEl.textContent = `❌ 帳號 ${email} 未在授權白名單內 (剩餘 ${remain} 次機會)`;
+                            msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                        }
                     }
                 } else {
-                    msgEl.textContent = `⚠️ 拒絕登入: ${data.message}`;
-                    msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                    const isLocked = handleLoginFailure();
+                    if (!isLocked) {
+                        let remain = 5 - parseInt(localStorage.getItem('loginAttempts') || '0', 10);
+                        msgEl.textContent = `⚠️ 拒絕登入: ${data.message} (剩餘 ${remain} 次機會)`;
+                        msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                    }
                 }
             } catch (err) {
                 msgEl.textContent = "連線驗證失敗，請檢查網路狀態";
@@ -364,6 +452,8 @@
         }
 
         function checkLoginStatus() {
+            if (checkLockout()) return; // 啟動時如果還在鎖定狀態，直接阻擋
+
             const savedEmail = localStorage.getItem('authEmailBookApp');
             if (savedEmail) {
                 document.getElementById('login-screen').style.display = 'none';
