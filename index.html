@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <!-- 引入 jsPDF 負責產出 PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- 🆕 引入 Google Sign-In API -->
+    <!-- 引入 Google Sign-In API -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         /* 隱藏的 A4 樣板，用於產生 PDF (A4 比例，96 DPI 下約 794x1123) */
@@ -105,25 +105,30 @@
     <div id="login-screen">
         <div class="login-box">
             <h1 class="text-2xl font-bold text-blue-600 mb-2">教科書驗收系統</h1>
-            <p class="text-gray-500 mb-6 text-sm">請使用 Google 帳號登入<br><span class="text-xs">(需管理員白名單授權)</span></p>
+            <p class="text-gray-500 mb-6 text-sm">請輸入密碼並使用 Google 帳號登入<br><span class="text-xs text-red-400">(雙重驗證)</span></p>
             
-            <div id="g_id_onload"
-                 data-client_id="553016940521-araovlp30ctbqn6um5rr49q3es5jm4jg.apps.googleusercontent.com"
-                 data-context="signin"
-                 data-ux_mode="popup"
-                 data-callback="handleCredentialResponse"
-                 data-auto_prompt="false">
-            </div>
+            <input type="password" id="system-auth-pwd" class="w-full border border-gray-300 rounded p-3 mb-6 focus:ring-blue-500 focus:border-blue-500 outline-none text-center shadow-sm" placeholder="1. 請先輸入系統密碼" oninput="checkPasswordInput()">
             
-            <!-- 置中對齊的登入按鈕 -->
-            <div style="display: flex; justify-content: center;">
-                <div class="g_id_signin"
-                     data-type="standard"
-                     data-shape="rectangular"
-                     data-theme="outline"
-                     data-text="signin_with"
-                     data-size="large"
-                     data-logo_alignment="center">
+            <div id="google-btn-wrapper" class="opacity-50 pointer-events-none transition-opacity duration-300 relative flex flex-col items-center">
+                <div class="text-sm text-gray-500 mb-3 font-bold">2. 點擊下方按鈕進行驗證</div>
+                <div id="g_id_onload"
+                     data-client_id="553016940521-araovlp30ctbqn6um5rr49q3es5jm4jg.apps.googleusercontent.com"
+                     data-context="signin"
+                     data-ux_mode="popup"
+                     data-callback="handleCredentialResponse"
+                     data-auto_prompt="false">
+                </div>
+                
+                <!-- 置中對齊的登入按鈕 -->
+                <div style="display: flex; justify-content: center;">
+                    <div class="g_id_signin"
+                         data-type="standard"
+                         data-shape="rectangular"
+                         data-theme="outline"
+                         data-text="signin_with"
+                         data-size="large"
+                         data-logo_alignment="center">
+                    </div>
                 </div>
             </div>
             
@@ -136,7 +141,7 @@
         <!-- 頂部導覽列 -->
         <div class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md relative">
             <h1 class="text-xl font-bold text-center">鳳甲國中 教科書驗收</h1>
-            <div class="text-center text-xs text-blue-200 mt-1">版本：20260312 (雲端管理版)</div>
+            <div class="text-center text-xs text-blue-200 mt-1">版本：20260312 (雙重認證版)</div>
             <!-- 登出按鈕 -->
             <button onclick="logout()" class="absolute right-4 top-4 bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition">登出</button>
         </div>
@@ -316,10 +321,24 @@
     </div>
 
     <script>
-        // ★ 使用您提供的部署 ID ★
+        // ★ 請確認此處為您 Google Apps Script 最新的網頁應用程式 URL ★
         const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxLaHMD45PfrLFBGAwTzElsmgiIarqJsOjbBeTItgDE0ZQydgjcPARUz6tlwFM4JJV8/exec';
 
-        // ---------------- 登入與記憶功能 ----------------
+        // ---------------- 登入與雙重認證機制 ----------------
+        function checkPasswordInput() {
+            const pwd = document.getElementById('system-auth-pwd').value;
+            const wrapper = document.getElementById('google-btn-wrapper');
+            const msgEl = document.getElementById('login-msg');
+            if (pwd.length > 0) {
+                wrapper.classList.remove('opacity-50', 'pointer-events-none');
+                if (msgEl.textContent === "請先輸入系統認證密碼！") {
+                    msgEl.textContent = "";
+                }
+            } else {
+                wrapper.classList.add('opacity-50', 'pointer-events-none');
+            }
+        }
+
         function decodeJwtResponse(token) {
             try {
                 let base64Url = token.split('.')[1];
@@ -333,42 +352,58 @@
             }
         }
 
+        // 處理 Google 回傳的 Credential 並同時送出密碼驗證
         async function handleCredentialResponse(response) {
+            const pwd = document.getElementById('system-auth-pwd').value;
+            const msgEl = document.getElementById('login-msg');
+
+            if (!pwd) {
+                msgEl.textContent = "請先輸入系統認證密碼！";
+                msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
+                return;
+            }
+
             const payload = decodeJwtResponse(response.credential);
-            if (payload && payload.email) {
-                const msgEl = document.getElementById('login-msg');
-                msgEl.textContent = "驗證白名單授權中...";
-                msgEl.className = "mt-4 font-bold text-blue-500 min-h-[24px]";
-                try {
-                    const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'verifyLogin', email: payload.email })
-                    });
-                    const data = await res.json();
-                    
-                    if (data.status === 'success') {
-                        if (data.authorized) {
-                            // 驗證成功，記憶於瀏覽器
-                            localStorage.setItem('authEmailBookApp', payload.email);
-                            startApp(payload.email);
-                        } else {
-                            msgEl.textContent = `❌ 帳號 ${payload.email} 無訪問權限`;
-                            msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
-                            localStorage.removeItem('authEmailBookApp');
-                        }
+            if (!payload || !payload.email) return;
+            const email = payload.email;
+
+            msgEl.textContent = "雲端驗證雙重授權中...";
+            msgEl.className = "mt-4 font-bold text-blue-500 min-h-[24px]";
+
+            try {
+                const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ 
+                        action: 'login_with_password', 
+                        email: email,
+                        password: pwd
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    if (data.authorized) {
+                        // 雙重驗證皆通過！寫入 LocalStorage 記住登入狀態 (只存 Email)
+                        localStorage.setItem('authEmailBookApp', email);
+                        startApp(email);
                     } else {
-                        // 精確顯示後端傳來的錯誤
-                        msgEl.textContent = `⚠️ 系統錯誤: ${data.message}`;
+                        // 密碼對了，但 Email 不在白名單
+                        msgEl.textContent = `❌ 帳號 ${email} 未在授權白名單內`;
                         msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
                     }
-                } catch (err) {
-                    msgEl.textContent = "連線驗證失敗，請檢查網路狀態";
+                } else {
+                    // 後端回傳錯誤 (通常是密碼錯誤)
+                    msgEl.textContent = `⚠️ 拒絕登入: ${data.message}`;
                     msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
                 }
+            } catch (err) {
+                msgEl.textContent = "連線驗證失敗，請檢查網路狀態";
+                msgEl.className = "mt-4 font-bold text-red-500 min-h-[24px]";
             }
         }
 
+        // 網頁重新整理時的背景驗證 (檢查 localStorage 是否存在，並確認仍存在於白名單)
         function checkLoginStatus() {
             const savedEmail = localStorage.getItem('authEmailBookApp');
             if (savedEmail) {
@@ -376,7 +411,7 @@
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-app').style.display = 'block';
                 
-                // 背景再確認一次，防止名單被刪除後仍能進入
+                // 背景再確認一次，防止名單被刪除後仍能進入 (不需要再傳密碼，因為已經取得 session 信任)
                 fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -384,19 +419,19 @@
                 })
                 .then(r => r.json())
                 .then(data => {
-                    // 如果後端正常回傳，且 authorized 為 false，代表被移出白名單
                     if (data.status === 'success' && !data.authorized) {
-                        alert("您的授權已被取消，請重新登入！");
+                        alert("您的帳號已被管理員移出白名單，請重新登入！");
                         logout();
-                    } else if (data.status === 'error') {
-                        console.error('背景驗證系統錯誤:', data.message);
                     }
                 }).catch(e => console.log('背景驗證中斷'));
 
                 startApp(savedEmail);
             } else {
+                // 無記憶，確保顯示登入畫面
                 document.getElementById('login-screen').style.display = 'flex';
                 document.getElementById('main-app').style.display = 'none';
+                document.getElementById('system-auth-pwd').value = '';
+                checkPasswordInput();
             }
         }
 
@@ -405,7 +440,7 @@
             location.reload();
         }
 
-        // 啟動系統的主要函式 (登入後執行)
+        // 啟動系統的主要函式
         function startApp(email) {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
